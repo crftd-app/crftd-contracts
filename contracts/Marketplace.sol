@@ -3,9 +3,10 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/interfaces/IERC721.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 
-import "./Token.sol";
 import "./Ownable.sol";
+import {MarketRegistry} from "./MarketRegistry.sol";
 
 error NotActive();
 error NoSupplyLeft();
@@ -17,7 +18,7 @@ error ContractCallNotAllowed();
 contract Marketplace is Ownable {
     /* ------------- Events ------------- */
 
-    event MarketItemPurchased(address indexed user, bytes32 indexed id);
+    event MarketItemPurchased(uint256 indexed marketId, address indexed user, bytes32 indexed itemHash);
 
     /* ------------- Structs ------------- */
 
@@ -39,6 +40,7 @@ contract Marketplace is Ownable {
     /* ------------- External ------------- */
 
     function purchaseMarketItem(
+        uint256 marketId,
         MarketItemData[] calldata marketItemData,
         address token,
         address receiver
@@ -49,7 +51,8 @@ contract Marketplace is Ownable {
         for (uint256 i; i < marketItemData.length; ) {
             MarketItemData calldata item = marketItemData[i];
 
-            bytes32 itemHash = keccak256(abi.encode(item, token, receiver));
+            // @note different token results in different itemHash!!!
+            bytes32 itemHash = keccak256(abi.encode(marketId, item, token, receiver));
 
             unchecked {
                 if (++totalSupply[itemHash] > item.maxSupply) revert NoSupplyLeft();
@@ -60,7 +63,7 @@ contract Marketplace is Ownable {
                 else totalPayment += item.tokenPrice;
             }
 
-            emit MarketItemPurchased(msg.sender, itemHash);
+            emit MarketItemPurchased(marketId, msg.sender, itemHash);
 
             unchecked {
                 ++i;
@@ -68,28 +71,13 @@ contract Marketplace is Ownable {
         }
 
         if (tokenPayment) {
-            if (receiver == address(0)) Token(token).burnFrom(msg.sender, totalPayment);
-            else Token(token).transferFrom(msg.sender, receiver, totalPayment);
+            if (receiver == address(0)) ERC20Burnable(token).burnFrom(msg.sender, totalPayment);
+            else ERC20Burnable(token).transferFrom(msg.sender, receiver, totalPayment);
         } else {
             if (receiver == address(0)) revert InvalidReceiver();
             if (msg.value != totalPayment) revert InsufficientValue();
             payable(receiver).transfer(msg.value);
         }
-    }
-
-    /* ------------- Owner ------------- */
-
-    function withdraw() external onlyOwner {
-        uint256 balance = address(this).balance;
-        payable(msg.sender).transfer(balance);
-    }
-
-    function recoverToken(IERC20 token) external onlyOwner {
-        token.transfer(msg.sender, token.balanceOf(address(this)));
-    }
-
-    function recoverNFT(IERC721 token, uint256 id) external onlyOwner {
-        token.transferFrom(address(this), msg.sender, id);
     }
 
     /* ------------- Modifier ------------- */
