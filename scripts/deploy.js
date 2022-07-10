@@ -9,8 +9,8 @@ async function main() {
   const Marketplace = await ethers.getContractFactory("Marketplace");
   const marketplace = await Marketplace.deploy();
 
-  const MarketRegistry = await ethers.getContractFactory("MarketRegistry");
-  const marketRegistry = await MarketRegistry.deploy(marketFees);
+  const CRFTDRegistry = await ethers.getContractFactory("CRFTDRegistry");
+  const marketRegistry = await CRFTDRegistry.deploy(marketFees);
 
   console.log(`token: "${token.address}",`);
   console.log(`marketplace: "${marketplace.address}",`);
