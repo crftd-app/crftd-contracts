@@ -5,11 +5,17 @@ import "forge-std/Script.sol";
 import "forge-std/Test.sol";
 
 import "solmate/test/utils/mocks/MockERC721.sol";
-import {ERC1967Proxy} from "UDS/proxy/ERC1967Proxy.sol";
+import "solmate/tokens/WETH.sol";
 
-import {CRFTDMarketplace} from "/CRFTDMarketplace.sol";
 import {CRFTDRegistry} from "/CRFTDRegistry.sol";
+import {CRFTDMarketplace} from "/CRFTDMarketplace.sol";
 import {CRFTDStakingDrip} from "/CRFTDStakingDrip.sol";
+
+import {UUPSUpgrade} from "proxies-with-immutable-args/UUPSUpgrade.sol";
+
+contract MockUUPSUpgrade is UUPSUpgrade {
+    function _authorizeUpgrade() internal virtual override {}
+}
 
 /* 
 source .env && forge script script/Deploy.s.sol:Deploy --rpc-url $PROVIDER_RINKEBY  --private-key $PRIVATE_KEY --broadcast --verify --etherscan-api-key $ETHERSCAN_KEY -vvvv
@@ -21,16 +27,26 @@ contract Deploy is Script {
     function run() external {
         vm.startBroadcast();
 
-        MockERC721 mock = new MockERC721("NFT", "nft");
+        WETH weth = new WETH();
+        MockERC721 mockNFT = new MockERC721("NFT", "nft");
 
-        CRFTDMarketplace marketplace = new CRFTDMarketplace();
+        CRFTDMarketplace marketplace = new CRFTDMarketplace(payable(weth));
         CRFTDRegistry registry = new CRFTDRegistry(0.01 ether);
         CRFTDStakingDrip stakingToken = new CRFTDStakingDrip();
 
+        mockNFT.mint(msg.sender, 1);
+        mockNFT.mint(msg.sender, 2);
+        mockNFT.mint(msg.sender, 3);
+        mockNFT.mint(msg.sender, 5);
+        mockNFT.mint(msg.sender, 6);
+        mockNFT.mint(msg.sender, 9);
+
         vm.stopBroadcast();
 
-        console.log("mock:");
-        console.logAddress(address(mock));
+        console.log("weth:");
+        console.logAddress(address(weth));
+        console.log(",mockNFT:");
+        console.logAddress(address(mockNFT));
         console.log(",marketplace:");
         console.logAddress(address(marketplace));
         console.log(",registry:");

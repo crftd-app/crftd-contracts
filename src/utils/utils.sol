@@ -32,4 +32,11 @@ library utils {
             mstore(0x40, ptr)
         }
     }
+
+    function indexOf(address[] calldata arr, address addr) internal pure returns (bool found, uint256 index) {
+        unchecked {
+            for (uint256 i; i < arr.length; ++i) if (arr[i] == addr) return (true, i);
+        }
+        return (false, 0);
+    }
 }

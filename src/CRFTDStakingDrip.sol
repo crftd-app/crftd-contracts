@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 import {ERC20DripUDS} from "UDS/tokens/ERC20DripUDS.sol";
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
 import {UUPSUpgrade} from "UDS/proxy/UUPSUpgrade.sol";
-import {LibERC1967ProxyWithImmutableArgs} from "UDS/proxy/ERC1967ProxyWithImmutableArgs.sol";
 
 import {ERC721} from "solmate/tokens/ERC721.sol";
 import {Owned} from "solmate/auth/Owned.sol";
@@ -22,18 +21,18 @@ error CollectionAlreadyRegistered();
 contract CRFTDStakingDrip is ERC20DripUDS, UUPSUpgrade, OwnableUDS {
     event CollectionRegistered(address indexed collection, uint256 rewardRate);
 
-    /* ------------- Storage ------------- */
-
     uint256 _rewardEndDate;
     mapping(address => mapping(uint256 => address)) public ownerOf;
     mapping(address => uint256) public rewardRate;
+
+    /* ------------- public ------------- */
 
     function rewardEndDate() public view override returns (uint256) {
         return _rewardEndDate;
     }
 
     function rewardDailyRate() public pure override returns (uint256) {
-        return 1e16; // 0.01
+        return 1e16;
     }
 
     /* ------------- external ------------- */

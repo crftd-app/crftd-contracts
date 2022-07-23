@@ -7,7 +7,7 @@ import {Owned} from "solmate/auth/Owned.sol";
 import {ERC721} from "solmate/tokens/ERC721.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
-WETH constant wrappedEther = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
+import {utils} from "./utils/utils.sol";
 
 error NotActive();
 error NoSupplyLeft();
@@ -21,11 +21,17 @@ error ContractCallNotAllowed();
 contract CRFTDMarketplace is Owned(msg.sender) {
     using SafeTransferLib for ERC20;
 
-    /* ------------- Events ------------- */
+    WETH immutable weth;
+
+    constructor(address payable wrappedEth) {
+        weth = WETH(wrappedEth);
+    }
+
+    /* ------------- events ------------- */
 
     event MarketItemPurchased(uint256 indexed marketId, address indexed user, bytes32 indexed itemHash);
 
-    /* ------------- Structs ------------- */
+    /* ------------- structs ------------- */
 
     struct MarketItem {
         uint256 marketId;
@@ -39,30 +45,21 @@ contract CRFTDMarketplace is Owned(msg.sender) {
         uint256[] tokenPrices;
     }
 
-    /* ------------- Storage ------------- */
+    /* ------------- storage ------------- */
 
     /// @dev mapping from (bytes32 itemHash) => (uint256 totalSupply)
     mapping(bytes32 => uint256) public totalSupply;
     /// @dev mapping from (bytes32 itemHash) => (address user) => (uint256 numPurchases)
     mapping(bytes32 => mapping(address => uint256)) public numPurchases;
 
-    /* ------------- Utils ------------- */
-
-    function indexOf(address[] calldata arr, address addr) internal pure returns (bool found, uint256 index) {
-        unchecked {
-            for (uint256 i; i < arr.length; ++i) if (arr[i] == addr) return (true, i);
-        }
-        return (false, 0);
-    }
-
-    /* ------------- External ------------- */
+    /* ------------- external ------------- */
 
     function purchaseMarketItems(MarketItem[] calldata items, address[] calldata paymentTokens) external payable {
         uint256 depositedEth;
 
         if (msg.value > 0) {
             depositedEth = msg.value;
-            wrappedEther.deposit{value: msg.value}();
+            weth.deposit{value: msg.value}();
         }
 
         for (uint256 i; i < items.length; ++i) {
@@ -78,13 +75,13 @@ contract CRFTDMarketplace is Owned(msg.sender) {
 
             address paymentToken = paymentTokens[i];
 
-            (bool found, uint256 tokenIndex) = indexOf(item.acceptedPaymentTokens, paymentToken);
+            (bool found, uint256 tokenIndex) = utils.indexOf(item.acceptedPaymentTokens, paymentToken);
 
             if (!found) revert InvalidPaymentToken();
 
             if (paymentToken == address(0)) {
                 depositedEth -= item.tokenPrices[tokenIndex];
-                wrappedEther.transfer(item.receiver, item.tokenPrices[tokenIndex]);
+                weth.transfer(item.receiver, item.tokenPrices[tokenIndex]);
             } else {
                 /// @note doesn't check for codeSize == 0, market owner's responsibility
                 ERC20(paymentToken).safeTransferFrom(msg.sender, item.receiver, item.tokenPrices[tokenIndex]);
@@ -96,7 +93,7 @@ contract CRFTDMarketplace is Owned(msg.sender) {
         if (depositedEth != 0) revert InvalidEthAmount();
     }
 
-    /* ------------- Owner ------------- */
+    /* ------------- owner ------------- */
 
     function withdrawETH() external onlyOwner {
         payable(msg.sender).transfer(address(this).balance);
