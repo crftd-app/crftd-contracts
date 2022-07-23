@@ -7,6 +7,9 @@
 [submodule "lib/solmate"]
 	path = lib/solmate
 	url = https://github.com/rari-capital/solmate
+[submodule "lib/proxies-with-immutable-args"]
+	path = lib/proxies-with-immutable-args
+	url = https://github.com/0xPhaze/proxies-with-immutable-args
 [submodule "lib/UDS"]
 	path = lib/UDS
 	url = https://github.com/0xPhaze/UDS
