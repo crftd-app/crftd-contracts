@@ -18,9 +18,9 @@ struct ERC20RewardPackedDS {
     uint216 totalSupply;
 }
 
-/// Minimal ERC721 staking contract for multiple collections
-/// Combined ERC20 Token to avoid external calls during claim
-/// @author phaze (https://github.com/0xPhaze)
+/// @title ERC20Reward Packed
+/// @author phaze (https://github.com/0xPhaze/UDS)
+/// @notice Saves up to 10% gas
 abstract contract ERC20RewardPackedUDS is ERC20RewardUDS {
     /* ------------- init ------------- */
 

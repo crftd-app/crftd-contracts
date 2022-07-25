@@ -8,15 +8,18 @@ import {ERC721} from "solmate/tokens/ERC721.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {utils} from "./utils/utils.sol";
+import {Choice} from "./utils/Choice.sol";
 
 error NotActive();
 error NoSupplyLeft();
+error NotAuthorized();
 error InvalidReceiver();
 error InvalidEthAmount();
 error InvalidPaymentToken();
 error InsufficientValue();
 error MaxPurchasesReached();
 error ContractCallNotAllowed();
+error RandomSeedAlreadyChosen();
 
 contract CRFTDMarketplace is Owned(msg.sender) {
     using SafeTransferLib for ERC20;
@@ -37,28 +40,36 @@ contract CRFTDMarketplace is Owned(msg.sender) {
         uint256 marketId;
         uint256 start;
         uint256 end;
+        uint256 expiry;
         uint256 maxPurchases;
         uint256 maxSupply;
+        uint256 raffleNumPrizes;
+        address[] raffleControllers;
         address receiver;
         bytes32 dataHash;
         address[] acceptedPaymentTokens;
-        uint256[] tokenPrices;
+        uint256[] tokenPricesStart;
+        uint256[] tokenPricesEnd;
     }
 
     /* ------------- storage ------------- */
 
-    /// @dev mapping from (bytes32 itemHash) => (uint256 totalSupply)
+    /// @dev (bytes32 itemHash) => (uint256 totalSupply)
     mapping(bytes32 => uint256) public totalSupply;
-    /// @dev mapping from (bytes32 itemHash) => (address user) => (uint256 numPurchases)
+    /// @dev (bytes32 itemHash) => (address user) => (uint256 numPurchases)
     mapping(bytes32 => mapping(address => uint256)) public numPurchases;
+    /// @dev (bytes32 itemHash) => (uint256 tokenId) => (address user)
+    mapping(bytes32 => mapping(uint256 => address)) public raffleEntries;
+    /// @dev (bytes32 itemHash) => (uint256 seed)
+    mapping(bytes32 => uint256) public raffleRandomSeeds;
 
     /* ------------- external ------------- */
 
     function purchaseMarketItems(MarketItem[] calldata items, address[] calldata paymentTokens) external payable {
-        uint256 depositedEth;
+        uint256 msgValue;
 
         if (msg.value > 0) {
-            depositedEth = msg.value;
+            msgValue = msg.value;
             weth.deposit{value: msg.value}();
         }
 
@@ -67,37 +78,95 @@ contract CRFTDMarketplace is Owned(msg.sender) {
 
             bytes32 itemHash = keccak256(abi.encode(item));
 
+            uint256 supply = totalSupply[itemHash];
+
             unchecked {
-                if (++totalSupply[itemHash] > item.maxSupply) revert NoSupplyLeft();
+                if (block.timestamp < item.start || item.expiry < block.timestamp) revert NotActive();
                 if (++numPurchases[itemHash][msg.sender] > item.maxPurchases) revert MaxPurchasesReached();
-                if (block.timestamp < item.start || item.end < block.timestamp) revert NotActive();
+                if (supply > item.maxSupply) revert NoSupplyLeft();
+
+                totalSupply[itemHash] = supply;
             }
 
             address paymentToken = paymentTokens[i];
 
             (bool found, uint256 tokenIndex) = utils.indexOf(item.acceptedPaymentTokens, paymentToken);
-
             if (!found) revert InvalidPaymentToken();
 
+            uint256 tokenPrice = item.tokenPricesStart[tokenIndex];
+
+            // dutch auction item
+            if (item.end == 0) {
+                uint256 timestamp = block.timestamp > item.end ? item.end : block.timestamp;
+
+                tokenPrice -=
+                    ((item.tokenPricesStart[tokenIndex] - item.tokenPricesEnd[tokenIndex]) * (timestamp - item.start)) /
+                    (item.end - item.start);
+            }
+
+            // raffle item; store id ownership
+            if (item.raffleNumPrizes == 0) {
+                raffleEntries[itemHash][supply] = msg.sender;
+            }
+
             if (paymentToken == address(0)) {
-                depositedEth -= item.tokenPrices[tokenIndex];
-                weth.transfer(item.receiver, item.tokenPrices[tokenIndex]);
+                msgValue -= tokenPrice;
+
+                weth.transfer(item.receiver, tokenPrice);
             } else {
-                /// @note doesn't check for codeSize == 0, market owner's responsibility
-                ERC20(paymentToken).safeTransferFrom(msg.sender, item.receiver, item.tokenPrices[tokenIndex]);
+                /// @note doesn't check for codeSize == 0, will be validated by frontend
+                ERC20(paymentToken).safeTransferFrom(msg.sender, item.receiver, tokenPrice);
             }
 
             emit MarketItemPurchased(item.marketId, msg.sender, itemHash);
         }
 
-        if (depositedEth != 0) revert InvalidEthAmount();
+        if (msgValue != 0) {
+            weth.transfer(msg.sender, msgValue);
+        }
+    }
+
+    /* ------------- view (off-chain) ------------- */
+
+    function getRaffleEntrants(bytes32 itemHash) external view returns (address[] memory entrants) {
+        uint256 supply = totalSupply[itemHash];
+
+        entrants = new address[](supply);
+
+        for (uint256 i; i < supply; ++i) entrants[i] = raffleEntries[itemHash][i + 1];
+    }
+
+    function getRaffleWinners(bytes32 itemHash, uint256 numPrizes) public view returns (address[] memory winners) {
+        uint256 randomSeed = raffleRandomSeeds[itemHash];
+
+        if (randomSeed == 0) return winners;
+
+        uint256[] memory winnerIds = Choice.selectNOfM(numPrizes, totalSupply[itemHash], randomSeed);
+
+        uint256 numWinners = winnerIds.length;
+
+        winners = new address[](numWinners);
+
+        for (uint256 i; i < numWinners; ++i) winners[i] = raffleEntries[itemHash][winnerIds[i] + 1];
+    }
+
+    /* ------------- Owner ------------- */
+
+    function revealRaffle(MarketItem calldata item) external {
+        bytes32 itemHash = keccak256(abi.encode(item));
+
+        if (block.timestamp < item.expiry) revert NotActive();
+
+        (bool found, ) = utils.indexOf(item.raffleControllers, msg.sender);
+
+        if (!found) revert NotAuthorized();
+
+        if (raffleRandomSeeds[itemHash] != 0) revert RandomSeedAlreadyChosen();
+
+        raffleRandomSeeds[itemHash] = uint256(keccak256(abi.encode(blockhash(block.number - 1), itemHash)));
     }
 
     /* ------------- owner ------------- */
-
-    function withdrawETH() external onlyOwner {
-        payable(msg.sender).transfer(address(this).balance);
-    }
 
     function recoverToken(ERC20 token) external onlyOwner {
         token.transfer(msg.sender, token.balanceOf(address(this)));

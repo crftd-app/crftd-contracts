@@ -1,3 +1,4 @@
+CRFTD/=src/
 ArrayUtils/=lib/ArrayUtils/src/
 UDS/=lib/UDS/src/
 ds-test/=lib/solmate/lib/ds-test/src/

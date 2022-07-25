@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ERC20RewardUDS} from "UDS/tokens/ERC20RewardUDS.sol";
+import {ERC20RewardPackedUDS} from "./ERC20RewardPacked.sol";
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
 import {UUPSUpgrade} from "UDS/proxy/UUPSUpgrade.sol";
 
 import {ERC721} from "solmate/tokens/ERC721.sol";
 import {Owned} from "solmate/auth/Owned.sol";
 
-import {utils} from "./utils/utils.sol";
+import {utils} from "../utils/utils.sol";
 
 error ZeroReward();
 error IncorrectOwner();
@@ -18,12 +18,11 @@ error CollectionAlreadyRegistered();
 /// Minimal ERC721 staking contract for multiple collections
 /// Combined ERC20 Token to avoid external calls during claim
 /// @author phaze (https://github.com/0xPhaze)
-contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
+contract CRFTDStakingToken is ERC20RewardPackedUDS, UUPSUpgrade, OwnableUDS {
     event CollectionRegistered(address indexed collection, uint256 rewardRate);
 
-    uint256 _rewardEndDate;
-    mapping(address => mapping(uint256 => address)) public ownerOf;
     mapping(address => uint256) public rewardRate;
+    mapping(address => mapping(uint256 => address)) public ownerOf;
 
     /* ------------- init ------------- */
 
@@ -36,11 +35,7 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         __ERC20_init(name, symbol, decimals);
     }
 
-    /* ------------- public ------------- */
-
-    function rewardEndDate() public view override returns (uint256) {
-        return _rewardEndDate;
-    }
+    /* ------------- pure ------------- */
 
     function rewardDailyRate() public pure override returns (uint256) {
         return 1e16;
@@ -103,8 +98,8 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         emit CollectionRegistered(collection, rate);
     }
 
-    function setRewardEndDate(uint256 endDate) external onlyOwner {
-        _rewardEndDate = endDate;
+    function setRewardEndDate(uint40 endDate) external onlyOwner {
+        _setRewardEndDate(endDate);
     }
 
     function mint(address to, uint256 amount) external onlyOwner {

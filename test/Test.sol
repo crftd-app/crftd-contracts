@@ -3,7 +3,8 @@ pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
 
-import "../src/CRFTDStaking.sol";
+import "../src/CRFTDStakingToken.sol";
+// import "../src/CRFTDStakingPacked.sol";
 import "ArrayUtils/ArrayUtils.sol";
 
 import {ERC1967Proxy} from "UDS/proxy/ERC1967Proxy.sol";
@@ -22,7 +23,14 @@ contract TestStakingToken is Test {
     function setUp() public {
         nft = new MockERC721UDS();
 
-        bytes memory initCalldata = abi.encodeWithSelector(CRFTDStakingToken.init.selector, "CRFTD", "CRFTD", 18);
+        bytes[] memory initDelegates = new bytes[](0);
+        bytes memory initCalldata = abi.encodeWithSelector(
+            CRFTDStakingToken.init.selector,
+            "CRFTD",
+            "CRFTD",
+            18,
+            initDelegates
+        );
 
         address impl = address(new CRFTDStakingToken());
         staking = CRFTDStakingToken(address(new ERC1967Proxy(impl, initCalldata)));
@@ -70,7 +78,7 @@ contract TestStakingToken is Test {
         vm.prank(tester);
         staking.unstake(address(nft), [21].toMemory());
 
-        staking.setRewardEndDate(block.timestamp + 100 days);
+        staking.setRewardEndDate(uint40(block.timestamp + 100 days));
     }
 
     function test_stake() public {
@@ -93,6 +101,7 @@ contract TestStakingToken is Test {
     }
 
     function test_stake_restake() public {
+        vm.prank(tester);
         staking.stake(address(nft), [21].toMemory());
     }
 
