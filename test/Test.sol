@@ -69,19 +69,40 @@ contract TestStakingToken is Test {
 
         vm.prank(tester);
         staking.unstake(address(nft), [21].toMemory());
+
+        staking.setRewardEndDate(block.timestamp + 100 days);
     }
 
-    function test_stake1() public {
+    function test_stake() public {
         vm.prank(bob);
         staking.stake(address(nft), [1].toMemory());
+
+        // skip(200);
+
+        // vm.prank(bob);
+        // staking.stake(address(nft), [2].toMemory());
+
+        // skip(200);
+
+        // console.log(staking.balanceOf(bob));
     }
 
-    function test_stake1_additional() public {
+    function test_stake_additional() public {
         vm.prank(alice);
         staking.stake(address(nft), [12].toMemory());
     }
 
-    function test_stake1_restake() public {
+    function test_stake_restake() public {
         staking.stake(address(nft), [21].toMemory());
+    }
+
+    function test_unstake() public {
+        vm.prank(alice);
+        staking.unstake(address(nft), [11].toMemory());
+    }
+
+    function test_claim() public {
+        vm.prank(alice);
+        staking.claimVirtualBalance();
     }
 }
