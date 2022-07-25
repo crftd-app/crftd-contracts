@@ -10,20 +10,34 @@ import {Owned} from "solmate/auth/Owned.sol";
 
 import {utils} from "./utils/utils.sol";
 
+// ------------- storage
+
+// keccak256("diamond.storage.crftd.token") == 0x0e539be85842d1c3b5b43263a827c1e07ab5a9c9536bf840ece723e480d80db7;
+bytes32 constant DIAMOND_STORAGE_CRFTD_TOKEN = 0x0e539be85842d1c3b5b43263a827c1e07ab5a9c9536bf840ece723e480d80db7;
+
+function s() pure returns (CRFTDTokenDS storage diamondStorage) {
+    assembly { diamondStorage.slot := DIAMOND_STORAGE_CRFTD_TOKEN } // prettier-ignore
+}
+
+struct CRFTDTokenDS {
+    uint256 rewardEndDate;
+    mapping(address => uint256) rewardRate;
+    mapping(address => mapping(uint256 => address)) ownerOf;
+}
+
+// ------------- errors
+
 error ZeroReward();
 error IncorrectOwner();
 error CollectionNotRegistered();
 error CollectionAlreadyRegistered();
 
-/// Minimal ERC721 staking contract for multiple collections
-/// Combined ERC20 Token to avoid external calls during claim
+/// @title CRFTDStakingToken
 /// @author phaze (https://github.com/0xPhaze)
+/// @notice Minimal ERC721 staking contract supporting multiple collections
+/// @notice Combines ERC20 Token to avoid external calls
 contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
     event CollectionRegistered(address indexed collection, uint256 rewardRate);
-
-    uint256 _rewardEndDate;
-    mapping(address => uint256) public rewardRate;
-    mapping(address => mapping(uint256 => address)) public ownerOf;
 
     /* ------------- init ------------- */
 
@@ -42,7 +56,15 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
     /* ------------- public ------------- */
 
     function rewardEndDate() public view override returns (uint256) {
-        return _rewardEndDate;
+        return s().rewardEndDate;
+    }
+
+    function rewardRate(address collection) public view returns (uint256) {
+        return s().rewardRate[collection];
+    }
+
+    function ownerOf(address collection, uint256 id) public view returns (address) {
+        return s().ownerOf[collection][id];
     }
 
     function rewardDailyRate() public pure override returns (uint256) {
@@ -52,7 +74,7 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
     /* ------------- external ------------- */
 
     function stake(address collection, uint256[] calldata tokenIds) external {
-        uint256 rate = rewardRate[collection];
+        uint256 rate = s().rewardRate[collection];
 
         if (rate == 0) revert CollectionNotRegistered();
 
@@ -61,21 +83,21 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         for (uint256 i; i < tokenIds.length; ++i) {
             ERC721(collection).transferFrom(msg.sender, address(this), tokenIds[i]);
 
-            ownerOf[collection][tokenIds[i]] = msg.sender;
+            s().ownerOf[collection][tokenIds[i]] = msg.sender;
         }
     }
 
     function unstake(address collection, uint256[] calldata tokenIds) external {
-        uint256 rate = rewardRate[collection];
+        uint256 rate = s().rewardRate[collection];
 
         if (rate == 0) revert CollectionNotRegistered();
 
         _decreaseRewardMultiplier(msg.sender, uint160(tokenIds.length));
 
         for (uint256 i; i < tokenIds.length; ++i) {
-            if (ownerOf[collection][tokenIds[i]] != msg.sender) revert IncorrectOwner();
+            if (s().ownerOf[collection][tokenIds[i]] != msg.sender) revert IncorrectOwner();
 
-            delete ownerOf[collection][tokenIds[i]];
+            delete s().ownerOf[collection][tokenIds[i]];
 
             ERC721(collection).transferFrom(address(this), msg.sender, tokenIds[i]);
         }
@@ -92,22 +114,22 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         address user,
         uint256 collectionSize
     ) external view returns (uint256[] memory stakedIds) {
-        return utils.getOwnedIds(ownerOf[collection], user, collectionSize);
+        return utils.getOwnedIds(s().ownerOf[collection], user, collectionSize);
     }
 
     /* ------------- owner ------------- */
 
     function registerCollection(address collection, uint200 rate) external onlyOwner {
         if (rate == 0) revert ZeroReward();
-        if (rewardRate[collection] != 0) revert CollectionAlreadyRegistered();
+        if (s().rewardRate[collection] != 0) revert CollectionAlreadyRegistered();
 
-        rewardRate[collection] = rate;
+        s().rewardRate[collection] = rate;
 
         emit CollectionRegistered(collection, rate);
     }
 
     function setRewardEndDate(uint256 endDate) external onlyOwner {
-        _rewardEndDate = endDate;
+        s().rewardEndDate = endDate;
     }
 
     function mint(address to, uint256 amount) external onlyOwner {
