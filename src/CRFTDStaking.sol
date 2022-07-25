@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ERC20DripUDS} from "UDS/tokens/ERC20DripUDS.sol";
+import {ERC20RewardUDS} from "UDS/tokens/ERC20RewardUDS.sol";
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
 import {UUPSUpgrade} from "UDS/proxy/UUPSUpgrade.sol";
 
@@ -18,12 +18,23 @@ error CollectionAlreadyRegistered();
 /// Minimal ERC721 staking contract for multiple collections
 /// Combined ERC20 Token to avoid external calls during claim
 /// @author phaze (https://github.com/0xPhaze)
-contract CRFTDStakingDrip is ERC20DripUDS, UUPSUpgrade, OwnableUDS {
+contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
     event CollectionRegistered(address indexed collection, uint256 rewardRate);
 
     uint256 _rewardEndDate;
     mapping(address => mapping(uint256 => address)) public ownerOf;
     mapping(address => uint256) public rewardRate;
+
+    /* ------------- init ------------- */
+
+    function init(
+        string calldata name,
+        string calldata symbol,
+        uint8 decimals
+    ) public initializer {
+        __Ownable_init();
+        __ERC20_init(name, symbol, decimals);
+    }
 
     /* ------------- public ------------- */
 
@@ -67,7 +78,7 @@ contract CRFTDStakingDrip is ERC20DripUDS, UUPSUpgrade, OwnableUDS {
         }
     }
 
-    /* ------------- O(n) Read-Only ------------- */
+    /* ------------- O(n) read-only ------------- */
 
     function stakedTokenIdsOf(
         address collection,

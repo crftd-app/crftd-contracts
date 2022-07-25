@@ -1,0 +1,3 @@
+TestStakingToken:test_stake1() (gas: 91742)
+TestStakingToken:test_stake1_additional() (gas: 83232)
+TestStakingToken:test_stake1_restake() (gas: 78326)

@@ -1,8 +1,5 @@
-/=src/
-@openzeppelin/=lib/UDS/node_modules/@openzeppelin/
+ArrayUtils/=lib/ArrayUtils/src/
 UDS/=lib/UDS/src/
 ds-test/=lib/solmate/lib/ds-test/src/
 forge-std/=lib/forge-std/src/
-openzeppelin-contracts/=lib/openzeppelin-contracts/
-proxies-with-immutable-args/=lib/proxies-with-immutable-args/src/
 solmate/=lib/solmate/src/
