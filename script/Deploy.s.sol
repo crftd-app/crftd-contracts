@@ -44,15 +44,16 @@ contract Deploy is Script {
 
         vm.stopBroadcast();
 
-        console.log("weth:");
+        console.log('weth:"');
         console.logAddress(address(weth));
-        console.log(",mockNFT:");
+        console.log('",mockERC721:"');
         console.logAddress(address(mockNFT));
-        console.log(",marketplace:");
+        console.log('",marketPlace:"');
         console.logAddress(address(marketplace));
-        console.log(",registry:");
+        console.log('",crftdRegistry:"');
         console.logAddress(address(registry));
-        console.log(",staking:");
+        console.log('",crftdStakingToken:"');
         console.logAddress(address(stakingToken));
+        console.log('"');
     }
 }
