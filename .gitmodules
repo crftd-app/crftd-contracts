@@ -1,15 +1,12 @@
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/brockelmore/forge-std
-[submodule "lib/openzeppelin-contracts"]
-	path = lib/openzeppelin-contracts
-	url = https://github.com/OpenZeppelin/openzeppelin-contracts
 [submodule "lib/solmate"]
 	path = lib/solmate
 	url = https://github.com/rari-capital/solmate
-[submodule "lib/proxies-with-immutable-args"]
-	path = lib/proxies-with-immutable-args
-	url = https://github.com/0xPhaze/proxies-with-immutable-args
 [submodule "lib/UDS"]
 	path = lib/UDS
 	url = https://github.com/0xPhaze/UDS
+[submodule "lib/ArrayUtils"]
+	path = lib/ArrayUtils
+	url = https://github.com/0xPhaze/ArrayUtils
