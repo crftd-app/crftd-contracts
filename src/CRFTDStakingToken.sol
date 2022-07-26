@@ -45,12 +45,13 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         string calldata name,
         string calldata symbol,
         uint8 decimals,
-        bytes[] calldata data
+        address callAddr,
+        bytes[] calldata calls
     ) external initializer {
         __Ownable_init();
         __ERC20_init(name, symbol, decimals);
 
-        utils.delegatecalls(data);
+        utils.delegatecalls(callAddr, calls);
     }
 
     /* ------------- public ------------- */
@@ -59,16 +60,16 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         return s().rewardEndDate;
     }
 
+    function rewardDailyRate() public pure override returns (uint256) {
+        return 1e16;
+    }
+
     function rewardRate(address collection) public view returns (uint256) {
         return s().rewardRate[collection];
     }
 
     function ownerOf(address collection, uint256 id) public view returns (address) {
         return s().ownerOf[collection][id];
-    }
-
-    function rewardDailyRate() public pure override returns (uint256) {
-        return 1e16;
     }
 
     /* ------------- external ------------- */
