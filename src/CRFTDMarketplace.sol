@@ -10,6 +10,8 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {utils} from "./utils/utils.sol";
 import {Choice} from "./utils/Choice.sol";
 
+import "forge-std/console.sol";
+
 error NotActive();
 error NoSupplyLeft();
 error NotAuthorized();
@@ -78,14 +80,12 @@ contract CRFTDMarketplace is Owned(msg.sender) {
 
             bytes32 itemHash = keccak256(abi.encode(item));
 
-            uint256 supply = totalSupply[itemHash];
+            uint256 supply = ++totalSupply[itemHash];
 
             unchecked {
                 if (block.timestamp < item.start || item.expiry < block.timestamp) revert NotActive();
                 if (++numPurchases[itemHash][msg.sender] > item.maxPurchases) revert MaxPurchasesReached();
                 if (supply > item.maxSupply) revert NoSupplyLeft();
-
-                totalSupply[itemHash] = supply;
             }
 
             address paymentToken = paymentTokens[i];
@@ -96,7 +96,7 @@ contract CRFTDMarketplace is Owned(msg.sender) {
             uint256 tokenPrice = item.tokenPricesStart[tokenIndex];
 
             // dutch auction item
-            if (item.end == 0) {
+            if (item.end != 0) {
                 uint256 timestamp = block.timestamp > item.end ? item.end : block.timestamp;
 
                 tokenPrice -=
@@ -105,7 +105,7 @@ contract CRFTDMarketplace is Owned(msg.sender) {
             }
 
             // raffle item; store id ownership
-            if (item.raffleNumPrizes == 0) {
+            if (item.raffleNumPrizes != 0) {
                 raffleEntries[itemHash][supply] = msg.sender;
             }
 
@@ -114,7 +114,7 @@ contract CRFTDMarketplace is Owned(msg.sender) {
 
                 weth.transfer(item.receiver, tokenPrice);
             } else {
-                /// @note doesn't check for codeSize == 0, will be validated by frontend
+                /// @note doesn't check for codeSize == 0, validated by frontend
                 ERC20(paymentToken).safeTransferFrom(msg.sender, item.receiver, tokenPrice);
             }
 
