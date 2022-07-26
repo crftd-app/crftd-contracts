@@ -78,7 +78,7 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
 
         if (rate == 0) revert CollectionNotRegistered();
 
-        _increaseRewardMultiplier(msg.sender, uint160(tokenIds.length * rate));
+        _increaseRewardMultiplier(msg.sender, uint216(tokenIds.length * rate));
 
         for (uint256 i; i < tokenIds.length; ++i) {
             ERC721(collection).transferFrom(msg.sender, address(this), tokenIds[i]);
@@ -92,7 +92,7 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
 
         if (rate == 0) revert CollectionNotRegistered();
 
-        _decreaseRewardMultiplier(msg.sender, uint160(tokenIds.length));
+        _decreaseRewardMultiplier(msg.sender, uint216(tokenIds.length * rate));
 
         for (uint256 i; i < tokenIds.length; ++i) {
             if (s().ownerOf[collection][tokenIds[i]] != msg.sender) revert IncorrectOwner();
