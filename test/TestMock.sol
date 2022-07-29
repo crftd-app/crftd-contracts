@@ -4,34 +4,22 @@ pragma solidity ^0.8.0;
 import "forge-std/Test.sol";
 
 import "../src/CRFTDStakingToken.sol";
-// import "../src/CRFTDStakingPacked.sol";
 import "ArrayUtils/ArrayUtils.sol";
+
+import "../script/Deploy.s.sol";
 
 import {ERC1967Proxy} from "UDS/proxy/ERC1967Proxy.sol";
 import {MockERC721UDS} from "UDS/../test/mocks/MockERC721UDS.sol";
 
-contract MockCRFTDStakingToken is CRFTDStakingToken {
-    function init_test(
-        string memory name,
-        string memory symbol,
-        uint8 decimals
-    ) public {
-        __ERC20_init(name, symbol, decimals);
-    }
-}
-
 contract TestStakingToken is Test {
-    using ArrayUtils for *;
-
-    MockCRFTDStakingToken staking;
-    MockERC721UDS nft;
-
     address bob = address(0xb0b);
     address alice = address(0xbabe);
     address tester = address(this);
 
+    MockERC721 mock;
+
     function setUp() public {
-        nft = new MockERC721UDS();
+        mock = new MockERC721UDS();
 
         address impl = address(new MockCRFTDStakingToken());
 
@@ -39,9 +27,11 @@ contract TestStakingToken is Test {
         initDelegates[0] = abi.encodeWithSelector(CRFTDStakingToken.registerCollection.selector, address(nft), 100);
         // initDelegates[1] = abi.encodeWithSelector(CRFTDStakingToken.setRewardEndDate.selector, block.timestamp + 100);
 
+        // mdump(initDelegates[1]);
+
         bytes memory initCalldata = abi.encodeWithSelector(
             CRFTDStakingToken.init.selector,
-            "CRFTD",
+            string("Bao"),
             "CRFTD",
             18,
             impl,

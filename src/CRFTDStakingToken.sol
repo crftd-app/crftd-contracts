@@ -12,8 +12,8 @@ import {utils} from "./utils/utils.sol";
 
 // ------------- storage
 
-// keccak256("diamond.storage.crftd.token") == 0x0e539be85842d1c3b5b43263a827c1e07ab5a9c9536bf840ece723e480d80db7;
-bytes32 constant DIAMOND_STORAGE_CRFTD_TOKEN = 0x0e539be85842d1c3b5b43263a827c1e07ab5a9c9536bf840ece723e480d80db7;
+// keccak256("diamond.storage.crftd.token") == 0x1a092854511578a55ddb9a3e239e5eb710da1c5cb2adb4c4d5c3fe3a7e2facec;
+bytes32 constant DIAMOND_STORAGE_CRFTD_TOKEN = 0x1a092854511578a55ddb9a3e239e5eb710da1c5cb2adb4c4d5c3fe3a7e2facec;
 
 function s() pure returns (CRFTDTokenDS storage diamondStorage) {
     assembly { diamondStorage.slot := DIAMOND_STORAGE_CRFTD_TOKEN } // prettier-ignore
@@ -44,14 +44,10 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
     function init(
         string calldata name,
         string calldata symbol,
-        uint8 decimals,
-        address callAddr,
-        bytes[] calldata calls
+        uint8 decimals
     ) external initializer {
         __Ownable_init();
         __ERC20_init(name, symbol, decimals);
-
-        utils.delegatecalls(callAddr, calls);
     }
 
     /* ------------- public ------------- */
@@ -133,8 +129,8 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         s().rewardEndDate = endDate;
     }
 
-    function mint(address to, uint256 amount) external onlyOwner {
-        _mint(to, amount);
+    function airdrop(address[] calldata tos, uint256[] calldata amounts) external onlyOwner {
+        for (uint256 i; i < tos.length; ++i) _mint(tos[i], amounts[i]);
     }
 
     /* ------------- UUPSUpgrade ------------- */

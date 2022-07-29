@@ -76,7 +76,8 @@ contract TestMarketplace is Test {
         itemsDutchAuction.push(itemDutchAuction);
 
         itemRaffle = item;
-        itemRaffle.raffleNumPrizes = 2;
+        itemRaffle.maxSupply = 20;
+        itemRaffle.raffleNumPrizes = 10;
         itemRaffle.raffleControllers.push(bob);
 
         itemsRaffle.push(itemRaffle);
@@ -187,5 +188,71 @@ contract TestMarketplace is Test {
         market.revealRaffle(itemRaffle);
 
         assertEq(market.getRaffleWinners(itemHash, itemRaffle.raffleNumPrizes)[0], tester);
+    }
+
+    function assertIncludes(address[] memory arr, address addr) internal {
+        uint256 i;
+
+        for (; i < arr.length; ++i) if (arr[i] == addr) return;
+
+        assertTrue(i != arr.length, "Arr doesn't contain element");
+    }
+
+    function assertUnique(address[] memory arr) internal {
+        uint256 arrLen = arr.length;
+
+        for (uint256 i; i < arrLen; ++i) {
+            for (uint256 j; j < arrLen; ++j) {
+                if (i != j && arr[i] == arr[j]) {
+                    emit log("Error: Duplicate Element found");
+                    fail();
+                }
+            }
+        }
+    }
+
+    function assertIsSubset(address[] memory a, address[] memory b) internal {
+        uint256 lenA = a.length;
+        uint256 lenB = b.length;
+
+        uint256 j;
+
+        for (uint256 i; i < lenA; ++i) {
+            for (; j < lenB; ++j) {
+                if (a[i] == a[j]) break;
+            }
+            if (j == lenB) {
+                emit log("Error: Element does not exist");
+                fail();
+            }
+        }
+    }
+
+    function test_purchaseMarketItemsRaffle2() public {
+        for (uint256 i; i < 20; i++) {
+            address user = address(uint160(0x100 + i));
+
+            mock1.mint(user, 1000 ether);
+
+            vm.prank(user);
+            mock1.approve(address(market), type(uint256).max);
+
+            vm.prank(user);
+            market.purchaseMarketItems(itemsRaffle, paymentTokens);
+        }
+
+        skip(101 days);
+        vm.roll(23);
+
+        vm.prank(bob);
+        market.revealRaffle(itemRaffle);
+
+        bytes32 itemHash = keccak256(abi.encode(itemRaffle));
+
+        address[] memory entrants = market.getRaffleEntrants(itemHash);
+        address[] memory winners = market.getRaffleWinners(itemHash, itemRaffle.raffleNumPrizes);
+
+        assertUnique(winners);
+        assertIsSubset(winners, entrants);
     }
 }

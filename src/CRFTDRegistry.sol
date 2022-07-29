@@ -5,14 +5,19 @@ import {Owned} from "solmate/auth/Owned.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC721} from "solmate/tokens/ERC721.sol";
 
+import {OwnableUDS as Ownable} from "UDS/auth/OwnableUDS.sol";
+import {ERC1967Proxy} from "UDS/proxy/ERC1967Proxy.sol";
+
 error IncorrectValue();
 
 contract CRFTDRegistry is Owned(msg.sender) {
-    /* ------------- Events ------------- */
+    /* ------------- events ------------- */
 
     event Registered(address indexed user, uint256 fee);
 
-    /* ------------- Storage ------------- */
+    event ProxyDeployed(address indexed owner, address indexed implementation);
+
+    /* ------------- storage ------------- */
 
     uint256 public registryFee;
 
@@ -20,7 +25,7 @@ contract CRFTDRegistry is Owned(msg.sender) {
         registryFee = registryFee_;
     }
 
-    /* ------------- External ------------- */
+    /* ------------- external ------------- */
 
     function register() external payable {
         if (msg.value != registryFee) revert IncorrectValue();
@@ -28,7 +33,30 @@ contract CRFTDRegistry is Owned(msg.sender) {
         emit Registered(msg.sender, registryFee);
     }
 
-    /* ------------- Owner ------------- */
+    function deployProxy(
+        address implementation,
+        bytes calldata initCalldata,
+        bytes[] calldata calls
+    ) external returns (address proxy) {
+        proxy = address(new ERC1967Proxy(implementation, initCalldata));
+
+        for (uint256 i; i < calls.length; ++i) {
+            (bool success, ) = proxy.call(calls[i]);
+
+            if (!success) {
+                assembly {
+                    returndatacopy(0, 0, returndatasize())
+                    revert(0, returndatasize())
+                }
+            }
+        }
+
+        Ownable(proxy).transferOwnership(msg.sender);
+
+        emit ProxyDeployed(msg.sender, proxy);
+    }
+
+    /* ------------- owner ------------- */
 
     function setRegistryFee(uint256 fees) external onlyOwner {
         registryFee = fees;

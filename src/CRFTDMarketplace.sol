@@ -34,7 +34,13 @@ contract CRFTDMarketplace is Owned(msg.sender) {
 
     /* ------------- events ------------- */
 
-    event MarketItemPurchased(uint256 indexed marketId, address indexed user, bytes32 indexed itemHash);
+    event MarketItemPurchased(
+        uint256 indexed marketId,
+        bytes32 indexed itemHash,
+        bytes32 indexed userHash,
+        address paymentToken,
+        uint256 price
+    );
 
     /* ------------- structs ------------- */
 
@@ -67,7 +73,11 @@ contract CRFTDMarketplace is Owned(msg.sender) {
 
     /* ------------- external ------------- */
 
-    function purchaseMarketItems(MarketItem[] calldata items, address[] calldata paymentTokens) external payable {
+    function purchaseMarketItems(
+        MarketItem[] calldata items,
+        address[] calldata paymentTokens,
+        bytes32 userHash
+    ) external payable {
         uint256 msgValue;
 
         if (msg.value > 0) {
@@ -118,7 +128,7 @@ contract CRFTDMarketplace is Owned(msg.sender) {
                 ERC20(paymentToken).safeTransferFrom(msg.sender, item.receiver, tokenPrice);
             }
 
-            emit MarketItemPurchased(item.marketId, msg.sender, itemHash);
+            emit MarketItemPurchased(item.marketId, itemHash, userHash, paymentToken, tokenPrice);
         }
 
         if (msgValue != 0) {
