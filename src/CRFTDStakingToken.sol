@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ERC20RewardUDS} from "UDS/tokens/ERC20RewardUDS.sol";
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
 import {UUPSUpgrade} from "UDS/proxy/UUPSUpgrade.sol";
+import {ERC20UDS} from "UDS/tokens/ERC20UDS.sol";
+import {ERC20RewardUDS} from "UDS/tokens/ERC20RewardUDS.sol";
 
 import {ERC721} from "solmate/tokens/ERC721.sol";
 import {Owned} from "solmate/auth/Owned.sol";
@@ -12,11 +13,11 @@ import {utils} from "./utils/utils.sol";
 
 // ------------- storage
 
-// keccak256("diamond.storage.crftd.token") == 0x1a092854511578a55ddb9a3e239e5eb710da1c5cb2adb4c4d5c3fe3a7e2facec;
-bytes32 constant DIAMOND_STORAGE_CRFTD_TOKEN = 0x1a092854511578a55ddb9a3e239e5eb710da1c5cb2adb4c4d5c3fe3a7e2facec;
+bytes32 constant DIAMOND_STORAGE_CRFTD_TOKEN = keccak256("diamond.storage.crftd.token");
 
 function s() pure returns (CRFTDTokenDS storage diamondStorage) {
-    assembly { diamondStorage.slot := DIAMOND_STORAGE_CRFTD_TOKEN } // prettier-ignore
+    bytes32 slot = DIAMOND_STORAGE_CRFTD_TOKEN;
+    assembly { diamondStorage.slot := slot } // prettier-ignore
 }
 
 struct CRFTDTokenDS {
@@ -32,6 +33,18 @@ error IncorrectOwner();
 error CollectionNotRegistered();
 error CollectionAlreadyRegistered();
 
+//       ___           ___           ___                    _____
+//      /  /\         /  /\         /  /\       ___        /  /::\
+//     /  /:/        /  /::\       /  /:/_     /__/\      /  /:/\:\
+//    /  /:/        /  /:/\:\     /  /:/ /\    \  \:\    /  /:/  \:\
+//   /  /:/  ___   /  /::\ \:\   /  /:/ /:/     \__\:\  /__/:/ \__\:|
+//  /__/:/  /  /\ /__/:/\:\_\:\ /__/:/ /:/      /  /::\ \  \:\ /  /:/
+//  \  \:\ /  /:/ \__\/~|::\/:/ \  \:\/:/      /  /:/\:\ \  \:\  /:/
+//   \  \:\  /:/     |  |:|::/   \  \::/      /  /:/__\/  \  \:\/:/
+//    \  \:\/:/      |  |:|\/     \  \:\     /__/:/        \  \::/
+//     \  \::/       |__|:|        \  \:\    \__\/          \__\/
+//      \__\/         \__\|         \__\/
+
 /// @title CRFTDStakingToken
 /// @author phaze (https://github.com/0xPhaze)
 /// @notice Minimal ERC721 staking contract supporting multiple collections
@@ -41,13 +54,9 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
 
     /* ------------- init ------------- */
 
-    function init(
-        string calldata name,
-        string calldata symbol,
-        uint8 decimals
-    ) external initializer {
+    function init(string calldata name, string calldata symbol) external initializer {
         __Ownable_init();
-        __ERC20_init(name, symbol, decimals);
+        __ERC20_init(name, symbol, 18);
     }
 
     /* ------------- public ------------- */
@@ -66,6 +75,28 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
 
     function ownerOf(address collection, uint256 id) public view returns (address) {
         return s().ownerOf[collection][id];
+    }
+
+    function getDailyReward(address user) public view returns (uint256) {
+        return _getRewardMultiplier(user) * rewardDailyRate();
+    }
+
+    /* ------------- erc20 ------------- */
+
+    function transfer(address to, uint256 amount) public virtual override returns (bool) {
+        if (balanceOf(msg.sender) < amount) _claimReward(msg.sender);
+
+        return ERC20UDS.transfer(to, amount);
+    }
+
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) public virtual override returns (bool) {
+        if (balanceOf(from) < amount) _claimReward(from);
+
+        return ERC20UDS.transferFrom(from, to, amount);
     }
 
     /* ------------- external ------------- */
@@ -100,13 +131,13 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         }
     }
 
-    function claimVirtualBalance() external {
-        _claimVirtualBalance(msg.sender);
+    function claimReward() external {
+        _claimReward(msg.sender);
     }
 
     /* ------------- O(n) read-only ------------- */
 
-    function stakedTokenIdsOf(
+    function stakedIdsOf(
         address collection,
         address user,
         uint256 collectionSize

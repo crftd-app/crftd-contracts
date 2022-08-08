@@ -1,43 +1,52 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {WETH} from "solmate/tokens/WETH.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Owned} from "solmate/auth/Owned.sol";
 import {ERC721} from "solmate/tokens/ERC721.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {utils} from "./utils/utils.sol";
-import {Choice} from "./utils/Choice.sol";
-
-import "forge-std/console.sol";
+import {choice} from "./utils/choice.sol";
 
 error NotActive();
 error NoSupplyLeft();
 error NotAuthorized();
 error InvalidReceiver();
 error InvalidEthAmount();
-error InvalidPaymentToken();
 error InsufficientValue();
+error InvalidPaymentToken();
 error MaxPurchasesReached();
 error ContractCallNotAllowed();
 error RandomSeedAlreadyChosen();
 
-contract CRFTDMarketplace is Owned(msg.sender) {
+//       ___           ___           ___                    _____
+//      /  /\         /  /\         /  /\       ___        /  /::\
+//     /  /:/        /  /::\       /  /:/_     /__/\      /  /:/\:\
+//    /  /:/        /  /:/\:\     /  /:/ /\    \  \:\    /  /:/  \:\
+//   /  /:/  ___   /  /::\ \:\   /  /:/ /:/     \__\:\  /__/:/ \__\:|
+//  /__/:/  /  /\ /__/:/\:\_\:\ /__/:/ /:/      /  /::\ \  \:\ /  /:/
+//  \  \:\ /  /:/ \__\/~|::\/:/ \  \:\/:/      /  /:/\:\ \  \:\  /:/
+//   \  \:\  /:/     |  |:|::/   \  \::/      /  /:/__\/  \  \:\/:/
+//    \  \:\/:/      |  |:|\/     \  \:\     /__/:/        \  \::/
+//     \  \::/       |__|:|        \  \:\    \__\/          \__\/
+//      \__\/         \__\|         \__\/
+
+/// @title CRFTDMarketplace
+/// @author phaze (https://github.com/0xPhaze)
+/// @notice Marketplace that supports purchasing limited off-chain items
+contract CRFTDMarketplace is Owned {
     using SafeTransferLib for ERC20;
 
-    WETH immutable weth;
-
-    constructor(address payable wrappedEth) {
-        weth = WETH(wrappedEth);
-    }
+    constructor(address payable wrappedEth) Owned(msg.sender) {}
 
     /* ------------- events ------------- */
 
     event MarketItemPurchased(
         uint256 indexed marketId,
         bytes32 indexed itemHash,
-        bytes32 indexed userHash,
+        address indexed account,
+        bytes32 userHash,
         address paymentToken,
         uint256 price
     );
@@ -78,12 +87,7 @@ contract CRFTDMarketplace is Owned(msg.sender) {
         address[] calldata paymentTokens,
         bytes32 userHash
     ) external payable {
-        uint256 msgValue;
-
-        if (msg.value > 0) {
-            msgValue = msg.value;
-            weth.deposit{value: msg.value}();
-        }
+        uint256 msgValue = msg.value;
 
         for (uint256 i; i < items.length; ++i) {
             MarketItem calldata item = items[i];
@@ -122,18 +126,17 @@ contract CRFTDMarketplace is Owned(msg.sender) {
             if (paymentToken == address(0)) {
                 msgValue -= tokenPrice;
 
-                weth.transfer(item.receiver, tokenPrice);
+                payable(item.receiver).transfer(tokenPrice);
             } else {
-                /// @note doesn't check for codeSize == 0, validated by frontend
+                require(paymentToken.code.length != 0);
+
                 ERC20(paymentToken).safeTransferFrom(msg.sender, item.receiver, tokenPrice);
             }
 
-            emit MarketItemPurchased(item.marketId, itemHash, userHash, paymentToken, tokenPrice);
+            emit MarketItemPurchased(item.marketId, itemHash, msg.sender, userHash, paymentToken, tokenPrice);
         }
 
-        if (msgValue != 0) {
-            weth.transfer(msg.sender, msgValue);
-        }
+        if (msgValue != 0) payable(msg.sender).transfer(msgValue);
     }
 
     /* ------------- view (off-chain) ------------- */
@@ -151,7 +154,7 @@ contract CRFTDMarketplace is Owned(msg.sender) {
 
         if (randomSeed == 0) return winners;
 
-        uint256[] memory winnerIds = Choice.selectNOfM(numPrizes, totalSupply[itemHash], randomSeed);
+        uint256[] memory winnerIds = choice.selectNOfM(numPrizes, totalSupply[itemHash], randomSeed);
 
         uint256 numWinners = winnerIds.length;
 
@@ -160,7 +163,7 @@ contract CRFTDMarketplace is Owned(msg.sender) {
         for (uint256 i; i < numWinners; ++i) winners[i] = raffleEntries[itemHash][winnerIds[i] + 1];
     }
 
-    /* ------------- Owner ------------- */
+    /* ------------- restricted ------------- */
 
     function revealRaffle(MarketItem calldata item) external {
         bytes32 itemHash = keccak256(abi.encode(item));

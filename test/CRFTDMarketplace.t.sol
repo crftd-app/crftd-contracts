@@ -114,8 +114,26 @@ contract TestMarketplace is Test {
 
     /* ------------- purchaseMarketItems() ------------- */
 
+    bytes32 constant GAS_SLOT = keccak256("gas.slot");
+
+    function logGas(bool log) private {
+        vm.toString(uint256(0));
+        bytes32 slot = GAS_SLOT;
+        uint256 lastGasUsed;
+        assembly {
+            lastGasUsed := sload(slot)
+            sstore(slot, 1)
+            sstore(slot, gas())
+        }
+        if (lastGasUsed != 0 && log) {
+            uint256 gasNow = gasleft();
+            uint256 gasSpent = lastGasUsed - gasNow - 1410;
+            console.log(string.concat(vm.toString(gasSpent), " gas "));
+        }
+    }
+
     function test_purchaseMarketItems() public {
-        market.purchaseMarketItems(items, paymentTokens);
+        market.purchaseMarketItems(items, paymentTokens, 0x0);
 
         assertEq(checkBalance(mock1, tester), item.tokenPricesStart[0]);
 
@@ -129,7 +147,12 @@ contract TestMarketplace is Test {
         items.push(item);
         paymentTokens.push(address(mock1));
 
-        market.purchaseMarketItems(items, paymentTokens);
+        CRFTDMarketplace.MarketItem[] memory items_ = items;
+        address[] memory tokens_ = paymentTokens;
+
+        logGas(false);
+        market.purchaseMarketItems(items_, tokens_, 0x0);
+        logGas(true);
 
         assertEq(checkBalance(mock1, tester), item.tokenPricesStart[0] * 2);
 
@@ -142,7 +165,7 @@ contract TestMarketplace is Test {
     /* ------------- purchaseMarketItemsDutchAuction() ------------- */
 
     function test_purchaseMarketItemsDutchAuction() public {
-        market.purchaseMarketItems(itemsDutchAuction, paymentTokens);
+        market.purchaseMarketItems(itemsDutchAuction, paymentTokens, 0x0);
 
         assertEq(checkBalance(mock1, tester), itemDutchAuction.tokenPricesStart[0]);
     }
@@ -157,7 +180,7 @@ contract TestMarketplace is Test {
             itemDutchAuction.end
         );
 
-        market.purchaseMarketItems(itemsDutchAuction, paymentTokens);
+        market.purchaseMarketItems(itemsDutchAuction, paymentTokens, 0x0);
 
         assertEq(checkBalance(mock1, tester), expectedTokenPrice);
     }
@@ -165,7 +188,7 @@ contract TestMarketplace is Test {
     function test_purchaseMarketItemsDutchAuction3() public {
         skip(10 hours);
 
-        market.purchaseMarketItems(itemsDutchAuction, paymentTokens);
+        market.purchaseMarketItems(itemsDutchAuction, paymentTokens, 0x0);
 
         assertEq(checkBalance(mock1, tester), itemDutchAuction.tokenPricesEnd[0]);
     }
@@ -173,7 +196,7 @@ contract TestMarketplace is Test {
     /* ------------- purchaseMarketItemsRaffle() ------------- */
 
     function test_purchaseMarketItemsRaffle() public {
-        market.purchaseMarketItems(itemsRaffle, paymentTokens);
+        market.purchaseMarketItems(itemsRaffle, paymentTokens, 0x0);
 
         assertEq(checkBalance(mock1, tester), itemRaffle.tokenPricesStart[0]);
 
@@ -238,7 +261,7 @@ contract TestMarketplace is Test {
             mock1.approve(address(market), type(uint256).max);
 
             vm.prank(user);
-            market.purchaseMarketItems(itemsRaffle, paymentTokens);
+            market.purchaseMarketItems(itemsRaffle, paymentTokens, 0x0);
         }
 
         skip(101 days);

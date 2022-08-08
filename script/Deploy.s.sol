@@ -16,10 +16,12 @@ import {CRFTDStakingToken} from "CRFTD/CRFTDStakingToken.sol";
 import {MockERC721} from "./MockERC721.sol";
 
 /* 
-source .env && forge script script/Deploy.s.sol:Deploy --rpc-url $PROVIDER_RINKEBY  --private-key $PRIVATE_KEY --broadcast --verify --etherscan-api-key $ETHERSCAN_KEY -vvvv
-source .env && forge script script/Deploy.s.sol:Deploy --rpc-url $PROVIDER_RINKEBY  --private-key $PRIVATE_KEY --resume --verify --etherscan-api-key $ETHERSCAN_KEY -vvvv
+source .env.local && forge script script/Deploy.s.sol:Deploy --rpc-url $PROVIDER_RINKEBY  --private-key $PRIVATE_KEY --broadcast --verify --etherscan-api-key $ETHERSCAN_KEY -vvvv
+source .env.local && forge script script/Deploy.s.sol:Deploy --rpc-url $PROVIDER_RINKEBY  --private-key $PRIVATE_KEY --resume --verify --etherscan-api-key $ETHERSCAN_KEY -vvvv
 
-source .env && forge script script/Deploy.s.sol:Deploy --rpc-url https://rpc.ankr.com/polygon  --private-key $PRIVATE_KEY --broadcast --verify --etherscan-api-key $POLYGONSCAN_KEY --with-gas-price 30gwei -vvvv
+source .env.local && forge script script/Deploy.s.sol:Deploy --rpc-url https://rpc.ankr.com/polygon  --private-key $PRIVATE_KEY --broadcast --verify --etherscan-api-key $POLYGONSCAN_KEY --with-gas-price 30gwei -vvvv
+
+source .env.local && forge script script/Deploy.s.sol:Deploy --rpc-url https://eth-goerli.g.alchemy.com/v2/lNJjaSqBw517GDQil1y8IJgfK17IzeKz  --private-key $PRIVATE_KEY --broadcast --verify --etherscan-api-key $ETHERSCAN_KEY --with-gas-price 2000000000000000000 -vvvv
 */
 
 contract Deploy is Script {
@@ -33,6 +35,8 @@ contract Deploy is Script {
         CRFTDMarketplace marketplace = new CRFTDMarketplace(payable(weth));
         CRFTDStakingToken stakingToken = new CRFTDStakingToken();
 
+        registry.setImplementationAllowed(address(stakingToken), true);
+
         mockNFT.mint(msg.sender, 1);
         mockNFT.mint(msg.sender, 2);
         mockNFT.mint(msg.sender, 3);
@@ -42,9 +46,9 @@ contract Deploy is Script {
 
         vm.stopBroadcast();
 
-        console.log('"mockERC721:"');
+        console.log('mockERC721:"');
         console.logAddress(address(mockNFT));
-        console.log('",crftdMarketPlace:"');
+        console.log('",crftdMarketplace:"');
         console.logAddress(address(marketplace));
         console.log('",crftdRegistry:"');
         console.logAddress(address(registry));

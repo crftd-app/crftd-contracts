@@ -1,6 +1,10 @@
-CRFTD/=src/
+@ensdomains/=lib/f-utils/node_modules/@ensdomains/
+@openzeppelin/=lib/f-utils/lib/openzeppelin-contracts/
 ArrayUtils/=lib/ArrayUtils/src/
 UDS/=lib/UDS/src/
+chainlink/=lib/f-utils/lib/chainlink/
 ds-test/=lib/solmate/lib/ds-test/src/
+f-utils/=lib/f-utils/src/
 forge-std/=lib/forge-std/src/
 solmate/=lib/solmate/src/
+CRFTD/=src/

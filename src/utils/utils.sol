@@ -39,17 +39,4 @@ library utils {
         }
         return (false, 0);
     }
-
-    function delegatecalls(address addr, bytes[] calldata data) internal {
-        for (uint256 i; i < data.length; i++) {
-            (bool success, ) = addr.delegatecall(data[i]);
-
-            if (!success) {
-                assembly {
-                    returndatacopy(0, 0, returndatasize())
-                    revert(0, returndatasize())
-                }
-            }
-        }
-    }
 }

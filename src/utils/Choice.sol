@@ -7,15 +7,15 @@ pragma solidity ^0.8.12;
 // caveats: splits random number into 16 parts for efficiency
 // this means that 65536 is the highest random number
 // (can skew uniform distributions when m is hight)
-library Choice {
+library choice {
     function selectNOfM(
         uint256 n,
         uint256 m,
         uint256 r
-    ) internal pure returns (uint256[] memory choice) {
+    ) internal pure returns (uint256[] memory selected) {
         if (n > m) n = m;
 
-        choice = new uint256[](n);
+        selected = new uint256[](n);
 
         uint256 s;
         uint256 slot;
@@ -32,11 +32,11 @@ library Choice {
                     if (slot == 0 && i != 0) r = uint256(keccak256(abi.encode(r, s)));
                     c = ((r >> slot) & 0xFFFF) % m;
                     invalidChoice = false;
-                    for (j = 0; j < i && !invalidChoice; ++j) invalidChoice = choice[j] == c;
+                    for (j = 0; j < i && !invalidChoice; ++j) invalidChoice = selected[j] == c;
                     ++s;
                 } while (invalidChoice);
 
-                choice[i] = c;
+                selected[i] = c;
             }
         }
     }

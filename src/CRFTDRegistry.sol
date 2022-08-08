@@ -10,16 +10,28 @@ import {ERC1967Proxy} from "UDS/proxy/ERC1967Proxy.sol";
 
 error IncorrectValue();
 
-contract CRFTDRegistry is Owned(msg.sender) {
-    /* ------------- events ------------- */
+//       ___           ___           ___                    _____
+//      /  /\         /  /\         /  /\       ___        /  /::\
+//     /  /:/        /  /::\       /  /:/_     /__/\      /  /:/\:\
+//    /  /:/        /  /:/\:\     /  /:/ /\    \  \:\    /  /:/  \:\
+//   /  /:/  ___   /  /::\ \:\   /  /:/ /:/     \__\:\  /__/:/ \__\:|
+//  /__/:/  /  /\ /__/:/\:\_\:\ /__/:/ /:/      /  /::\ \  \:\ /  /:/
+//  \  \:\ /  /:/ \__\/~|::\/:/ \  \:\/:/      /  /:/\:\ \  \:\  /:/
+//   \  \:\  /:/     |  |:|::/   \  \::/      /  /:/__\/  \  \:\/:/
+//    \  \:\/:/      |  |:|\/     \  \:\     /__/:/        \  \::/
+//     \  \::/       |__|:|        \  \:\    \__\/          \__\/
+//      \__\/         \__\|         \__\/
 
+/// @title CRFTDRegistry
+/// @author phaze (https://github.com/0xPhaze)
+/// @notice CRFTD proxy registry
+contract CRFTDRegistry is Owned(msg.sender) {
     event Registered(address indexed user, uint256 fee);
 
-    event ProxyDeployed(address indexed owner, address indexed implementation);
-
-    /* ------------- storage ------------- */
+    event ProxyDeployed(address indexed owner, address indexed proxy);
 
     uint256 public registryFee;
+    mapping(address => bool) approvedImplementations;
 
     constructor(uint256 registryFee_) {
         registryFee = registryFee_;
@@ -58,12 +70,17 @@ contract CRFTDRegistry is Owned(msg.sender) {
 
     /* ------------- owner ------------- */
 
+    function setImplementationAllowed(address implementation, bool allowed) external onlyOwner {
+        approvedImplementations[implementation] = allowed;
+    }
+
     function setRegistryFee(uint256 fees) external onlyOwner {
         registryFee = fees;
     }
 
     function withdrawETH() external onlyOwner {
-        payable(msg.sender).transfer(address(this).balance);
+        (bool success, ) = msg.sender.call{value: address(this).balance}("");
+        require(success);
     }
 
     function recoverToken(ERC20 token) external onlyOwner {
