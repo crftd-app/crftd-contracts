@@ -14,3 +14,6 @@
 [submodule "lib/futils"]
 	path = lib/futils
 	url = https://github.com/0xPhaze/futils
+[submodule "lib/upgrade-scripts"]
+	path = lib/upgrade-scripts
+	url = https://github.com/0xPhaze/upgrade-scripts

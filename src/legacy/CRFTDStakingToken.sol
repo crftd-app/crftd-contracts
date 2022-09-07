@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import {utils} from "../utils/utils.sol";
+import {ERC721} from "solmate/tokens/ERC721.sol";
+import {ERC20UDS} from "UDS/tokens/ERC20UDS.sol";
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
 import {UUPSUpgrade} from "UDS/proxy/UUPSUpgrade.sol";
-import {ERC20UDS} from "UDS/tokens/ERC20UDS.sol";
-import {ERC20RewardUDS} from "UDS/tokens/ERC20RewardUDS.sol";
-
-import {ERC721} from "solmate/tokens/ERC721.sol";
-import {Owned} from "solmate/auth/Owned.sol";
-
-import {utils} from "./utils/utils.sol";
+import {ERC20RewardUDS} from "UDS/tokens/extensions/ERC20RewardUDS.sol";
 
 // ------------- storage
 
@@ -48,8 +45,8 @@ error CollectionAlreadyRegistered();
 /// @title CRFTDStakingToken
 /// @author phaze (https://github.com/0xPhaze)
 /// @notice Minimal ERC721 staking contract supporting multiple collections
-/// @notice Combines ERC20 Token to avoid external calls
-contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
+/// @notice Combines ERC20 token to avoid external calls
+contract CRFTDStakingTokenV1 is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
     event CollectionRegistered(address indexed collection, uint256 rewardRate);
 
     /* ------------- init ------------- */
@@ -59,14 +56,14 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         __ERC20_init(name, symbol, 18);
     }
 
-    /* ------------- public ------------- */
+    /* ------------- view ------------- */
 
     function rewardEndDate() public view override returns (uint256) {
         return s().rewardEndDate;
     }
 
     function rewardDailyRate() public pure override returns (uint256) {
-        return 1e16;
+        return 1e16; // 0.01
     }
 
     function rewardRate(address collection) public view returns (uint256) {
@@ -84,7 +81,7 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
     /* ------------- erc20 ------------- */
 
     function transfer(address to, uint256 amount) public virtual override returns (bool) {
-        if (balanceOf(msg.sender) < amount) _claimReward(msg.sender);
+        _claimReward(msg.sender);
 
         return ERC20UDS.transfer(to, amount);
     }
@@ -94,7 +91,7 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         address to,
         uint256 amount
     ) public virtual override returns (bool) {
-        if (balanceOf(from) < amount) _claimReward(from);
+        _claimReward(from);
 
         return ERC20UDS.transferFrom(from, to, amount);
     }
@@ -141,7 +138,7 @@ contract CRFTDStakingToken is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         address collection,
         address user,
         uint256 collectionSize
-    ) external view returns (uint256[] memory stakedIds) {
+    ) external view returns (uint256[] memory) {
         return utils.getOwnedIds(s().ownerOf[collection], user, collectionSize);
     }
 

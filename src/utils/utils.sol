@@ -7,29 +7,30 @@ library utils {
         address user,
         uint256 collectionSize
     ) internal view returns (uint256[] memory ids) {
-        uint256 ptr;
-        uint256 size;
+        uint256 memPtr;
+        uint256 idsLength;
 
         assembly {
             ids := mload(0x40)
-            ptr := add(ids, 32)
+            memPtr := add(ids, 32)
         }
 
         unchecked {
-            for (uint256 id = 0; id < collectionSize + 1; ++id) {
+            uint256 end = collectionSize + 1;
+            for (uint256 id = 0; id < end; ++id) {
                 if (ownerOf[id] == user) {
                     assembly {
-                        mstore(ptr, id)
-                        ptr := add(ptr, 32)
-                        size := add(size, 1)
+                        mstore(memPtr, id)
+                        memPtr := add(memPtr, 32)
+                        idsLength := add(idsLength, 1)
                     }
                 }
             }
         }
 
         assembly {
-            mstore(ids, size)
-            mstore(0x40, ptr)
+            mstore(ids, idsLength)
+            mstore(0x40, memPtr)
         }
     }
 

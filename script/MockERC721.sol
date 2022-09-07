@@ -10,6 +10,8 @@ import "CRFTD/utils/utils.sol";
 contract MockERC721 is UUPSUpgrade, ERC721UDS {
     string baseURI;
 
+    uint256 public totalSupply;
+
     function init(
         string memory _name,
         string memory _symbol,
@@ -19,15 +21,15 @@ contract MockERC721 is UUPSUpgrade, ERC721UDS {
 
         baseURI = uri;
 
-        for (uint256 i; i < 20; i++) _mint(msg.sender, i);
+        for (uint256 i; i < 20; i++) mint(msg.sender);
     }
 
     function tokenURI(uint256 id) public view virtual override returns (string memory) {
         return string.concat(baseURI, LibString.toString(id), ".json");
     }
 
-    function mint(address to, uint256 tokenId) public virtual {
-        _mint(to, tokenId);
+    function mint(address to) public virtual {
+        _mint(to, ++totalSupply);
     }
 
     function getOwnedIds(address user) external view returns (uint256[] memory ids) {

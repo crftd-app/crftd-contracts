@@ -4,9 +4,8 @@ pragma solidity ^0.8.0;
 import {Owned} from "solmate/auth/Owned.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC721} from "solmate/tokens/ERC721.sol";
-
-import {OwnableUDS as Ownable} from "UDS/auth/OwnableUDS.sol";
 import {ERC1967Proxy} from "UDS/proxy/ERC1967Proxy.sol";
+import {OwnableUDS as Ownable} from "UDS/auth/OwnableUDS.sol";
 
 error IncorrectValue();
 

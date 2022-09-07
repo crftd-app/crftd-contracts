@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import {utils} from "./utils/utils.sol";
+import {choice} from "./utils/choice.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Owned} from "solmate/auth/Owned.sol";
 import {ERC721} from "solmate/tokens/ERC721.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
-
-import {utils} from "./utils/utils.sol";
-import {choice} from "./utils/choice.sol";
 
 error NotActive();
 error NoSupplyLeft();
@@ -35,10 +34,8 @@ error RandomSeedAlreadyChosen();
 /// @title CRFTDMarketplace
 /// @author phaze (https://github.com/0xPhaze)
 /// @notice Marketplace that supports purchasing limited off-chain items
-contract CRFTDMarketplace is Owned {
+contract CRFTDMarketplace is Owned(msg.sender) {
     using SafeTransferLib for ERC20;
-
-    constructor(address payable wrappedEth) Owned(msg.sender) {}
 
     /* ------------- events ------------- */
 

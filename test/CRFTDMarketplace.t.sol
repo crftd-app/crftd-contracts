@@ -7,11 +7,13 @@ import "forge-std/Test.sol";
 import "solmate/test/utils/mocks/MockERC20.sol";
 import "solmate/tokens/WETH.sol";
 
+import {ERC1967Proxy} from "UDS/proxy/ERC1967Proxy.sol";
+
 import "CRFTD/CRFTDMarketplace.sol";
-import "ArrayUtils/ArrayUtils.sol";
+import "futils/futils.sol";
 
 contract TestMarketplace is Test {
-    using ArrayUtils for *;
+    using futils for *;
 
     WETH weth;
 
@@ -35,9 +37,7 @@ contract TestMarketplace is Test {
     address tester = address(this);
 
     function setUp() public {
-        weth = new WETH();
-
-        market = new CRFTDMarketplace(payable(weth));
+        market = new CRFTDMarketplace();
 
         mock1 = new MockERC20("", "", 18);
         mock2 = new MockERC20("", "", 18);
@@ -89,7 +89,7 @@ contract TestMarketplace is Test {
 
     mapping(address => mapping(address => uint256)) _balance_check;
 
-    function checkBalance(MockERC20 token, address user) internal returns (uint256) {
+    function checkBalance(ERC20 token, address user) internal returns (uint256) {
         uint256 balance = token.balanceOf(user);
         uint256 balanceBefore = _balance_check[address(token)][user];
 
@@ -114,6 +114,17 @@ contract TestMarketplace is Test {
 
     /* ------------- purchaseMarketItems() ------------- */
 
+    function test_purchaseMarketItems() public {
+        market.purchaseMarketItems(items, paymentTokens, 0x0);
+
+        assertEq(checkBalance(mock1, tester), item.tokenPricesStart[0]);
+
+        bytes32 itemHash = keccak256(abi.encode(item));
+
+        assertEq(market.totalSupply(itemHash), 1);
+        assertEq(market.numPurchases(itemHash, tester), 1);
+    }
+
     bytes32 constant GAS_SLOT = keccak256("gas.slot");
 
     function logGas(bool log) private {
@@ -132,27 +143,11 @@ contract TestMarketplace is Test {
         }
     }
 
-    function test_purchaseMarketItems() public {
-        market.purchaseMarketItems(items, paymentTokens, 0x0);
-
-        assertEq(checkBalance(mock1, tester), item.tokenPricesStart[0]);
-
-        bytes32 itemHash = keccak256(abi.encode(item));
-
-        assertEq(market.totalSupply(itemHash), 1);
-        assertEq(market.numPurchases(itemHash, tester), 1);
-    }
-
     function test_purchaseMarketItems2() public {
         items.push(item);
         paymentTokens.push(address(mock1));
 
-        CRFTDMarketplace.MarketItem[] memory items_ = items;
-        address[] memory tokens_ = paymentTokens;
-
-        logGas(false);
-        market.purchaseMarketItems(items_, tokens_, 0x0);
-        logGas(true);
+        market.purchaseMarketItems(items, paymentTokens, 0x0);
 
         assertEq(checkBalance(mock1, tester), item.tokenPricesStart[0] * 2);
 
@@ -251,31 +246,31 @@ contract TestMarketplace is Test {
         }
     }
 
-    function test_purchaseMarketItemsRaffle2() public {
-        for (uint256 i; i < 20; i++) {
-            address user = address(uint160(0x100 + i));
+    // function test_purchaseMarketItemsRaffle2() public {
+    //     for (uint256 i; i < 20; i++) {
+    //         address user = address(uint160(0x100 + i));
 
-            mock1.mint(user, 1000 ether);
+    //         mock1.mint(user, 1000 ether);
 
-            vm.prank(user);
-            mock1.approve(address(market), type(uint256).max);
+    //         vm.prank(user);
+    //         mock1.approve(address(market), type(uint256).max);
 
-            vm.prank(user);
-            market.purchaseMarketItems(itemsRaffle, paymentTokens, 0x0);
-        }
+    //         vm.prank(user);
+    //         market.purchaseMarketItems(itemsRaffle, paymentTokens, 0x0);
+    //     }
 
-        skip(101 days);
-        vm.roll(23);
+    //     skip(101 days);
+    //     vm.roll(23);
 
-        vm.prank(bob);
-        market.revealRaffle(itemRaffle);
+    //     vm.prank(bob);
+    //     market.revealRaffle(itemRaffle);
 
-        bytes32 itemHash = keccak256(abi.encode(itemRaffle));
+    //     bytes32 itemHash = keccak256(abi.encode(itemRaffle));
 
-        address[] memory entrants = market.getRaffleEntrants(itemHash);
-        address[] memory winners = market.getRaffleWinners(itemHash, itemRaffle.raffleNumPrizes);
+    //     address[] memory entrants = market.getRaffleEntrants(itemHash);
+    //     address[] memory winners = market.getRaffleWinners(itemHash, itemRaffle.raffleNumPrizes);
 
-        assertUnique(winners);
-        assertIsSubset(winners, entrants);
-    }
+    //     assertUnique(winners);
+    //     assertIsSubset(winners, entrants);
+    // }
 }
