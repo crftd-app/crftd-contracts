@@ -92,8 +92,8 @@ contract CRFTDStakingToken is FxERC721sRootTunnelUDS, ERC20RewardUDS, OwnableUDS
     }
 
     function migrationStarted() public view returns (bool) {
-        if (rewardEndDate() != MIGRATION_START_DATE) return false;
         if (fxChildTunnel() == address(0)) return false;
+        if (rewardEndDate() != MIGRATION_START_DATE) return false;
 
         return true;
     }

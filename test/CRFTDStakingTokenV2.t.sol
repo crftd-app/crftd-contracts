@@ -99,8 +99,6 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
 
     /* ------------- migration() ------------- */
 
-    // function test_startMigration() public {}
-
     uint256 constant MIGRATION_START_DATE = (1 << 42) - 1;
 
     function test_safeMigrate() public {

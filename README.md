@@ -1,27 +1,12 @@
-# CRFTD Contracts
+# CRFTD
 
 ```ml
 src
-├── CRFTDMarketplace.sol
-├── CRFTDRegistry.sol
-├── CRFTDStakingToken.sol
+├── CRFTDMarketplace.sol - "CRFTD Marketplace Contract"
+├── CRFTDRegistry.sol - "Proxy Registry Contract"
+├── CRFTDStakingTokenChild.sol - "CRFTD Staking L2 Contract"
+├── CRFTDStakingTokenRoot.sol - "CRFTD Staking L1 Contract"
 └── utils
     ├── Choice.sol
     └── utils.sol
-```
-
-# UDS
-
-```ml
-lib/UDS/src
-├── auth
-│   ├── EIP712PermitUDS.sol
-│   ├── Initializable.sol
-│   └── OwnableUDS.sol
-├── proxy
-│   ├── ERC1967Proxy.sol
-│   └── UUPSUpgrade.sol
-└── tokens
-    ├── ERC20RewardUDS.sol
-    └── ERC20UDS.sol
 ```

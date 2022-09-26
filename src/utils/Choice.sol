@@ -1,12 +1,12 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.12;
 
-// author: phaze
-
-// assumption: n << m
-// caveats: splits random number into 16 parts for efficiency
-// this means that 65536 is the highest random number
-// (can skew uniform distributions when m is hight)
+/// @title Random Choice Library
+/// @author phaze (https://github.com/0xPhaze)
+/// @notice Selects `n` out of `m` given the random seed `r`.
+/// @dev Caution: Uses only 16 bits of randomness for efficiency.
+///      Assumes `n` << `m`: If `n` is close to `m` and `m` is big
+///      the complexity will be very bad.
 library choice {
     function selectNOfM(
         uint256 n,

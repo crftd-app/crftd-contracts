@@ -79,6 +79,7 @@ contract CRFTDRegistry is Owned(msg.sender) {
 
     function withdrawETH() external onlyOwner {
         (bool success, ) = msg.sender.call{value: address(this).balance}("");
+
         require(success);
     }
 
