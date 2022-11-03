@@ -15,3 +15,6 @@ broadcast
 
 !.gas-snapshot
 !.prettierrc
+
+deployments/5
+deployments/80001

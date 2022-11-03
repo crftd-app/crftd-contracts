@@ -5,7 +5,7 @@ import {UUPSUpgrade} from "UDS/proxy/UUPSUpgrade.sol";
 import {ERC721UDS, s as erc721ds} from "UDS/tokens/ERC721UDS.sol";
 
 import "solmate/utils/LibString.sol";
-import "CRFTD/utils/utils.sol";
+import "CRFTD/lib/utils.sol";
 
 contract MockERC721 is UUPSUpgrade, ERC721UDS {
     string baseURI;
@@ -36,5 +36,5 @@ contract MockERC721 is UUPSUpgrade, ERC721UDS {
         return utils.getOwnedIds(erc721ds().ownerOf, user, 500);
     }
 
-    function _authorizeUpgrade() internal virtual override {}
+    function _authorizeUpgrade(address) internal virtual override {}
 }

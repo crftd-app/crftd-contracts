@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {utils} from "../utils/utils.sol";
+import {utils} from "../lib/utils.sol";
 import {ERC721} from "solmate/tokens/ERC721.sol";
 import {ERC20UDS} from "UDS/tokens/ERC20UDS.sol";
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
@@ -163,5 +163,5 @@ contract CRFTDStakingTokenV1 is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
 
     /* ------------- UUPSUpgrade ------------- */
 
-    function _authorizeUpgrade() internal override onlyOwner {}
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 }

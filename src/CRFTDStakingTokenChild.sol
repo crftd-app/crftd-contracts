@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {utils} from "./utils/utils.sol";
+import {utils} from "./lib/utils.sol";
 import {ERC721} from "solmate/tokens/ERC721.sol";
 import {ERC20UDS} from "UDS/tokens/ERC20UDS.sol";
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
 import {UUPSUpgrade} from "UDS/proxy/UUPSUpgrade.sol";
-import {MINT_ERC20_SIG} from "fx-contracts/FxERC20RootUDS.sol";
+import {FxERC721sChild} from "fx-contracts/FxERC721sChild.sol";
 import {ERC20RewardUDS} from "UDS/tokens/extensions/ERC20RewardUDS.sol";
-import {FxERC721sEnumerableChildTunnelUDS} from "fx-contracts/extensions/FxERC721sEnumerableChildTunnelUDS.sol";
+import {FxERC721sEnumerableChild} from "fx-contracts/extensions/FxERC721sEnumerableChild.sol";
+import {REGISTER_ERC721_IDS_SELECTOR} from "fx-contracts/FxERC721Root.sol";
+import {FxERC20UDSChild, MINT_ERC20_SELECTOR} from "fx-contracts/FxERC20UDSChild.sol";
 
 // ------------- storage
 
@@ -28,6 +30,7 @@ struct CRFTDTokenDS {
 // ------------- errors
 
 error ZeroReward();
+error InvalidSelector();
 error CollectionAlreadyRegistered();
 
 //       ___           ___           ___                    _____
@@ -46,10 +49,10 @@ error CollectionAlreadyRegistered();
 /// @author phaze (https://github.com/0xPhaze)
 /// @notice Minimal ERC721 staking contract supporting multiple collections
 /// @notice Relays id ownership to ERC20 Token on L2
-contract CRFTDStakingToken is FxERC721sEnumerableChildTunnelUDS, ERC20RewardUDS, OwnableUDS, UUPSUpgrade {
+contract CRFTDStakingToken is FxERC721sEnumerableChild, ERC20RewardUDS, OwnableUDS, UUPSUpgrade {
     event CollectionRegistered(address indexed collection, uint256 rewardRate);
 
-    constructor(address fxChild) FxERC721sEnumerableChildTunnelUDS(fxChild) {
+    constructor(address fxChild) FxERC721sEnumerableChild(fxChild) {
         __ERC20_init("CRFTD", "CRFTD", 18);
     }
 
@@ -78,6 +81,14 @@ contract CRFTDStakingToken is FxERC721sEnumerableChildTunnelUDS, ERC20RewardUDS,
         return _getRewardMultiplier(user) * rewardDailyRate();
     }
 
+    function stakedIdsOf(
+        address collection,
+        address user,
+        uint256
+    ) external view returns (uint256[] memory) {
+        return FxERC721sEnumerableChild.getOwnedIds(collection, user);
+    }
+
     /* ------------- external ------------- */
 
     function claimReward() external {
@@ -86,15 +97,20 @@ contract CRFTDStakingToken is FxERC721sEnumerableChildTunnelUDS, ERC20RewardUDS,
 
     /* ------------- internal ------------- */
 
-    function _processSignature(bytes32 signature, bytes memory data) internal override returns (bool) {
-        if (signature == MINT_ERC20_SIG) {
-            (address to, uint256 amount) = abi.decode(data, (address, uint256));
+    function _processMessageFromRoot(
+        uint256 stateId,
+        address rootMessageSender,
+        bytes calldata message
+    ) internal virtual override {
+        bytes4 selector = bytes4(message);
+
+        if (selector == MINT_ERC20_SELECTOR) {
+            (address to, uint256 amount) = abi.decode(message[4:], (address, uint256));
 
             _mint(to, amount);
-
-            return true;
+        } else {
+            FxERC721sChild._processMessageFromRoot(stateId, rootMessageSender, message);
         }
-        return false;
     }
 
     /* ------------- erc20 ------------- */
@@ -117,26 +133,22 @@ contract CRFTDStakingToken is FxERC721sEnumerableChildTunnelUDS, ERC20RewardUDS,
 
     /* ------------- hooks ------------- */
 
-    // function _afterIdRegistered(
-    //     address collection,
-    //     address to,
-    //     uint256 id
-    // ) internal override {}
-
-    // function _afterIdDeregistered(
-    //     address collection,
-    //     address from,
-    //     uint256 id
-    // ) internal override {}
-
-    /* ------------- O(n) read-only ------------- */
-
-    function stakedIdsOf(
+    function _afterIdRegistered(
         address collection,
-        address user,
-        uint256
-    ) external view returns (uint256[] memory) {
-        return FxERC721sEnumerableChildTunnelUDS.getOwnedIds(collection, user);
+        address from,
+        address to,
+        uint256 id
+    ) internal virtual override {
+        super._afterIdRegistered(collection, from, to, id);
+
+        uint256 rate = s().rewardRate[collection];
+
+        if (from != address(0)) {
+            _decreaseRewardMultiplier(msg.sender, uint216(rate));
+        }
+        if (to != address(0)) {
+            _increaseRewardMultiplier(msg.sender, uint216(rate));
+        }
     }
 
     /* ------------- owner ------------- */
@@ -154,13 +166,17 @@ contract CRFTDStakingToken is FxERC721sEnumerableChildTunnelUDS, ERC20RewardUDS,
         s().rewardEndDate = endDate;
     }
 
+    function airdrop(address[] calldata tos, uint256 amount) external onlyOwner {
+        for (uint256 i; i < tos.length; ++i) _mint(tos[i], amount);
+    }
+
     function airdrop(address[] calldata tos, uint256[] calldata amounts) external onlyOwner {
         for (uint256 i; i < tos.length; ++i) _mint(tos[i], amounts[i]);
     }
 
     /* ------------- override ------------- */
 
-    function _authorizeUpgrade() internal override onlyOwner {}
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     function _authorizeTunnelController() internal override onlyOwner {}
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {utils} from "./utils/utils.sol";
-import {choice} from "./utils/choice.sol";
+import {utils} from "./lib/utils.sol";
+import {choice} from "./lib/choice.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Owned} from "solmate/auth/Owned.sol";
 import {ERC721} from "solmate/tokens/ERC721.sol";

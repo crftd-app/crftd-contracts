@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 library utils {
     function getOwnedIds(
-        mapping(uint256 => address) storage ownerOf,
+        mapping(uint256 => address) storage ownerMapping,
         address user,
         uint256 collectionSize
     ) internal view returns (uint256[] memory ids) {
@@ -18,7 +18,7 @@ library utils {
         unchecked {
             uint256 end = collectionSize + 1;
             for (uint256 id = 0; id < end; ++id) {
-                if (ownerOf[id] == user) {
+                if (ownerMapping[id] == user) {
                     assembly {
                         mstore(memPtr, id)
                         memPtr := add(memPtr, 32)
@@ -31,6 +31,23 @@ library utils {
         assembly {
             mstore(ids, idsLength)
             mstore(0x40, memPtr)
+        }
+    }
+
+    function balanceOf(
+        mapping(uint256 => address) storage ownerMapping,
+        address user,
+        uint256 collectionSize
+    ) internal view returns (uint256 numOwned) {
+        unchecked {
+            uint256 end = collectionSize + 1;
+            address owner;
+            for (uint256 id = 0; id < end; ++id) {
+                owner = ownerMapping[id];
+                assembly {
+                    numOwned := add(numOwned, eq(owner, user))
+                }
+            }
         }
     }
 

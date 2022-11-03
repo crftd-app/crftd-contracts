@@ -25,23 +25,15 @@ error IncorrectValue();
 /// @author phaze (https://github.com/0xPhaze)
 /// @notice CRFTD proxy registry
 contract CRFTDRegistry is Owned(msg.sender) {
-    event Registered(address indexed user, uint256 fee);
-
+    event Registered(address indexed user, bytes32 id, uint256 fee);
     event ProxyDeployed(address indexed owner, address indexed proxy);
 
-    uint256 public registryFee;
-    mapping(address => bool) approvedImplementations;
-
-    constructor(uint256 registryFee_) {
-        registryFee = registryFee_;
-    }
+    mapping(address => bool) public approvedImplementation;
 
     /* ------------- external ------------- */
 
-    function register() external payable {
-        if (msg.value != registryFee) revert IncorrectValue();
-
-        emit Registered(msg.sender, registryFee);
+    function register(bytes32 id) external payable {
+        emit Registered(msg.sender, id, msg.value);
     }
 
     function deployProxy(
@@ -69,12 +61,8 @@ contract CRFTDRegistry is Owned(msg.sender) {
 
     /* ------------- owner ------------- */
 
-    function setImplementationAllowed(address implementation, bool allowed) external onlyOwner {
-        approvedImplementations[implementation] = allowed;
-    }
-
-    function setRegistryFee(uint256 fees) external onlyOwner {
-        registryFee = fees;
+    function setImplementationApproved(address implementation, bool approved) external onlyOwner {
+        approvedImplementation[implementation] = approved;
     }
 
     function withdrawETH() external onlyOwner {

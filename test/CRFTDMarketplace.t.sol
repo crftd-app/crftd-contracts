@@ -8,6 +8,7 @@ import "solmate/test/utils/mocks/MockERC20.sol";
 import "solmate/tokens/WETH.sol";
 
 import {ERC1967Proxy} from "UDS/proxy/ERC1967Proxy.sol";
+import {CollablandProxy} from "CRFTD/lib/CollablandProxy.sol";
 
 import "CRFTD/CRFTDMarketplace.sol";
 import "futils/futils.sol";

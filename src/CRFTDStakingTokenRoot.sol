@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {utils} from "./utils/utils.sol";
+import {utils} from "./lib/utils.sol";
 import {ERC20UDS} from "UDS/tokens/ERC20UDS.sol";
 import {ERC721UDS} from "UDS/tokens/ERC721UDS.sol";
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
 import {UUPSUpgrade} from "UDS/proxy/UUPSUpgrade.sol";
-import {MINT_ERC20_SIG} from "fx-contracts/FxERC20RootUDS.sol";
+import {FxERC721sRoot} from "fx-contracts/FxERC721sRoot.sol";
 import {ERC20RewardUDS} from "UDS/tokens/extensions/ERC20RewardUDS.sol";
-import {FxERC721sRootTunnelUDS} from "fx-contracts/FxERC721sRootTunnelUDS.sol";
+import {MINT_ERC20_SELECTOR} from "fx-contracts/FxERC20UDSRoot.sol";
 
 // ------------- storage
 
@@ -28,6 +28,7 @@ struct CRFTDTokenDS {
 // ------------- errors
 
 error ZeroReward();
+error ExceedsLimit();
 error IncorrectOwner();
 error InvalidFxChild();
 error MigrationRequired();
@@ -52,13 +53,13 @@ error CollectionAlreadyRegistered();
 /// @author phaze (https://github.com/0xPhaze)
 /// @notice Minimal cross-chain ERC721 staking contract supporting multiple collections
 /// @notice Token ids are registered with child ERC20 token
-contract CRFTDStakingToken is FxERC721sRootTunnelUDS, ERC20RewardUDS, OwnableUDS, UUPSUpgrade {
+contract CRFTDStakingToken is FxERC721sRoot, ERC20RewardUDS, OwnableUDS, UUPSUpgrade {
     event CollectionRegistered(address indexed collection, uint256 rewardRate);
 
     /// @dev Setting `rewardEndDate` to this date enables migration.
     uint256 constant MIGRATION_START_DATE = (1 << 42) - 1;
 
-    constructor(address checkpointManager, address fxRoot) FxERC721sRootTunnelUDS(checkpointManager, fxRoot) {
+    constructor(address checkpointManager, address fxRoot) FxERC721sRoot(checkpointManager, fxRoot) {
         __ERC20_init("CRFTD", "CRFTD", 18);
     }
 
@@ -106,9 +107,7 @@ contract CRFTDStakingToken is FxERC721sRootTunnelUDS, ERC20RewardUDS, OwnableUDS
     /// @param collection erc721 collection address.
     /// @param tokenIds erc721 id array per collection.
     function stake(address collection, uint256[] calldata tokenIds) external {
-        uint256 rate = s().rewardRate[collection];
-
-        if (rate == 0) revert CollectionNotRegistered();
+        if (tokenIds.length > 20) revert ExceedsLimit();
 
         for (uint256 i; i < tokenIds.length; ++i) {
             ERC721UDS(collection).transferFrom(msg.sender, address(this), tokenIds[i]);
@@ -117,10 +116,17 @@ contract CRFTDStakingToken is FxERC721sRootTunnelUDS, ERC20RewardUDS, OwnableUDS
         }
 
         if (migrationStarted()) {
+            // note: we allow any collection to be transferred once L2 is activated.
+            // Unrecognized collections are ignored on L2. This removes the need
+            // to force a synchronized state of both contracts.
             if (_getRewardMultiplier(msg.sender) != 0) revert MigrationRequired();
 
             _registerERC721IdsWithChild(collection, msg.sender, tokenIds);
         } else {
+            uint256 rate = s().rewardRate[collection];
+
+            if (rate == 0) revert CollectionNotRegistered();
+
             _increaseRewardMultiplier(msg.sender, uint216(tokenIds.length * rate));
         }
     }
@@ -130,15 +136,19 @@ contract CRFTDStakingToken is FxERC721sRootTunnelUDS, ERC20RewardUDS, OwnableUDS
     /// @param collection erc721 collection address.
     /// @param tokenIds erc721 id array per collection.
     function unstake(address collection, uint256[] calldata tokenIds) external {
-        uint256 rate = s().rewardRate[collection];
-
-        if (rate == 0) revert CollectionNotRegistered();
+        if (tokenIds.length > 20) revert ExceedsLimit();
 
         if (migrationStarted()) {
             if (_getRewardMultiplier(msg.sender) != 0) revert MigrationRequired();
 
-            _deregisterERC721IdsWithChild(collection, tokenIds);
-        } else _decreaseRewardMultiplier(msg.sender, uint216(tokenIds.length * rate));
+            _registerERC721IdsWithChild(collection, address(0), tokenIds);
+        } else {
+            uint256 rate = s().rewardRate[collection];
+
+            if (rate == 0) revert CollectionNotRegistered();
+
+            _decreaseRewardMultiplier(msg.sender, uint216(tokenIds.length * rate));
+        }
 
         for (uint256 i; i < tokenIds.length; ++i) {
             if (s().ownerOf[collection][tokenIds[i]] != msg.sender) revert IncorrectOwner();
@@ -197,9 +207,7 @@ contract CRFTDStakingToken is FxERC721sRootTunnelUDS, ERC20RewardUDS, OwnableUDS
         uint256 balance = balanceOf(msg.sender);
 
         _burn(msg.sender, balance);
-
-        _sendMessageToChild(abi.encode(MINT_ERC20_SIG, abi.encode(msg.sender, balance)));
-
+        _sendMessageToChild(abi.encodeWithSelector(MINT_ERC20_SELECTOR, msg.sender, balance));
         _setRewardMultiplier(msg.sender, 0);
 
         // migrate erc721 ids
@@ -242,6 +250,22 @@ contract CRFTDStakingToken is FxERC721sRootTunnelUDS, ERC20RewardUDS, OwnableUDS
         return utils.getOwnedIds(s().ownerOf[collection], user, collectionSize);
     }
 
+    function stakedBalanceOf(
+        address collection,
+        address user,
+        uint256 collectionSize
+    ) external view returns (uint256) {
+        return utils.balanceOf(s().ownerOf[collection], user, collectionSize);
+    }
+
+    function ownedBalanceOf(
+        address collection,
+        address user,
+        uint256 collectionSize
+    ) external view returns (uint256) {
+        return ERC721UDS(collection).balanceOf(user) + utils.balanceOf(s().ownerOf[collection], user, collectionSize);
+    }
+
     /* ------------- owner ------------- */
 
     function startMigration(address fxChild) public onlyOwner {
@@ -265,13 +289,17 @@ contract CRFTDStakingToken is FxERC721sRootTunnelUDS, ERC20RewardUDS, OwnableUDS
         emit CollectionRegistered(collection, rate);
     }
 
+    function airdrop(address[] calldata tos, uint256 amount) external onlyOwner {
+        for (uint256 i; i < tos.length; ++i) _mint(tos[i], amount);
+    }
+
     function airdrop(address[] calldata tos, uint256[] calldata amounts) external onlyOwner {
         for (uint256 i; i < tos.length; ++i) _mint(tos[i], amounts[i]);
     }
 
     /* ------------- override ------------- */
 
-    function _authorizeUpgrade() internal override onlyOwner {}
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     function _authorizeTunnelController() internal override onlyOwner {}
 }

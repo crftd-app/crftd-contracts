@@ -84,6 +84,8 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
         uint256 amountOut,
         uint256 r
     ) public {
+        amountIn = bound(amountIn, 0, 20);
+
         test_stake(amountIn, amountOut, r);
 
         upgradeToken();
