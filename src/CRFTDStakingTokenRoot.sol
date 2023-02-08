@@ -7,16 +7,20 @@ import {ERC721UDS} from "UDS/tokens/ERC721UDS.sol";
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
 import {UUPSUpgrade} from "UDS/proxy/UUPSUpgrade.sol";
 import {FxERC721sRoot} from "fx-contracts/FxERC721sRoot.sol";
+import {Multicallable} from "UDS/utils/Multicallable.sol";
 import {ERC20RewardUDS} from "UDS/tokens/extensions/ERC20RewardUDS.sol";
 import {MINT_ERC20_SELECTOR} from "fx-contracts/FxERC20UDSRoot.sol";
 
 // ------------- storage
 
-bytes32 constant DIAMOND_STORAGE_CRFTD_TOKEN = keccak256("diamond.storage.crftd.token");
+/// @dev diamond storage slot `keccak256("diamond.storage.crftd.token")`
+bytes32 constant DIAMOND_STORAGE_CRFTD_TOKEN = 0x1a092854511578a55ddb9a3e239e5eb710da1c5cb2adb4c4d5c3fe3a7e2facec;
 
 function s() pure returns (CRFTDTokenDS storage diamondStorage) {
     bytes32 slot = DIAMOND_STORAGE_CRFTD_TOKEN;
-    assembly { diamondStorage.slot := slot } // prettier-ignore
+    assembly {
+        diamondStorage.slot := slot
+    }
 }
 
 struct CRFTDTokenDS {
@@ -31,6 +35,7 @@ error ZeroReward();
 error ExceedsLimit();
 error IncorrectOwner();
 error InvalidFxChild();
+error MigrationStarted();
 error MigrationRequired();
 error MigrationIncomplete();
 error MigrationNotStarted();
@@ -53,7 +58,7 @@ error CollectionAlreadyRegistered();
 /// @author phaze (https://github.com/0xPhaze)
 /// @notice Minimal cross-chain ERC721 staking contract supporting multiple collections
 /// @notice Token ids are registered with child ERC20 token
-contract CRFTDStakingToken is FxERC721sRoot, ERC20RewardUDS, OwnableUDS, UUPSUpgrade {
+contract CRFTDStakingToken is FxERC721sRoot, ERC20RewardUDS, OwnableUDS, UUPSUpgrade, Multicallable {
     event CollectionRegistered(address indexed collection, uint256 rewardRate);
 
     /// @dev Setting `rewardEndDate` to this date enables migration.
@@ -77,7 +82,7 @@ contract CRFTDStakingToken is FxERC721sRoot, ERC20RewardUDS, OwnableUDS, UUPSUpg
     }
 
     function rewardDailyRate() public pure override returns (uint256) {
-        return 1e16; // 0.01
+        return 0.01e18;
     }
 
     function rewardRate(address collection) public view returns (uint256) {
@@ -116,10 +121,10 @@ contract CRFTDStakingToken is FxERC721sRoot, ERC20RewardUDS, OwnableUDS, UUPSUpg
         }
 
         if (migrationStarted()) {
+            if (_getRewardMultiplier(msg.sender) != 0) revert MigrationRequired();
             // note: we allow any collection to be transferred once L2 is activated.
             // Unrecognized collections are ignored on L2. This removes the need
             // to force a synchronized state of both contracts.
-            if (_getRewardMultiplier(msg.sender) != 0) revert MigrationRequired();
 
             _registerERC721IdsWithChild(collection, msg.sender, tokenIds);
         } else {
@@ -177,6 +182,8 @@ contract CRFTDStakingToken is FxERC721sRoot, ERC20RewardUDS, OwnableUDS, UUPSUpg
             if (rate == 0) revert CollectionNotRegistered();
 
             uint256[] calldata ids = tokenIds[i];
+            if (ids.length > 20) revert ExceedsLimit();
+
             mapping(uint256 => address) storage owners = s().ownerOf[collections[i]];
 
             rewardMultiplier += ids.length * rate;
@@ -230,11 +237,7 @@ contract CRFTDStakingToken is FxERC721sRoot, ERC20RewardUDS, OwnableUDS, UUPSUpg
         return ERC20UDS.transfer(to, amount);
     }
 
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) public virtual override returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
         _claimReward(from);
 
         return ERC20UDS.transferFrom(from, to, amount);
@@ -242,27 +245,23 @@ contract CRFTDStakingToken is FxERC721sRoot, ERC20RewardUDS, OwnableUDS, UUPSUpg
 
     /* ------------- O(n) read-only ------------- */
 
-    function stakedIdsOf(
-        address collection,
-        address user,
-        uint256 collectionSize
-    ) external view returns (uint256[] memory) {
+    function stakedIdsOf(address collection, address user, uint256 collectionSize)
+        external
+        view
+        returns (uint256[] memory)
+    {
         return utils.getOwnedIds(s().ownerOf[collection], user, collectionSize);
     }
 
-    function stakedBalanceOf(
-        address collection,
-        address user,
-        uint256 collectionSize
-    ) external view returns (uint256) {
+    function stakedBalanceOf(address collection, address user, uint256 collectionSize)
+        external
+        view
+        returns (uint256)
+    {
         return utils.balanceOf(s().ownerOf[collection], user, collectionSize);
     }
 
-    function ownedBalanceOf(
-        address collection,
-        address user,
-        uint256 collectionSize
-    ) external view returns (uint256) {
+    function ownedBalanceOf(address collection, address user, uint256 collectionSize) external view returns (uint256) {
         return ERC721UDS(collection).balanceOf(user) + utils.balanceOf(s().ownerOf[collection], user, collectionSize);
     }
 
@@ -282,6 +281,7 @@ contract CRFTDStakingToken is FxERC721sRoot, ERC20RewardUDS, OwnableUDS, UUPSUpg
 
     function registerCollection(address collection, uint200 rate) external onlyOwner {
         if (rate == 0) revert ZeroReward();
+        if (migrationStarted()) revert MigrationStarted();
         if (s().rewardRate[collection] != 0) revert CollectionAlreadyRegistered();
 
         s().rewardRate[collection] = rate;
@@ -290,11 +290,19 @@ contract CRFTDStakingToken is FxERC721sRoot, ERC20RewardUDS, OwnableUDS, UUPSUpg
     }
 
     function airdrop(address[] calldata tos, uint256 amount) external onlyOwner {
-        for (uint256 i; i < tos.length; ++i) _mint(tos[i], amount);
+        unchecked {
+            for (uint256 i; i < tos.length; ++i) {
+                _mint(tos[i], amount);
+            }
+        }
     }
 
     function airdrop(address[] calldata tos, uint256[] calldata amounts) external onlyOwner {
-        for (uint256 i; i < tos.length; ++i) _mint(tos[i], amounts[i]);
+        unchecked {
+            for (uint256 i; i < tos.length; ++i) {
+                _mint(tos[i], amounts[i]);
+            }
+        }
     }
 
     /* ------------- override ------------- */

@@ -14,7 +14,9 @@ bytes32 constant DIAMOND_STORAGE_CRFTD_TOKEN = keccak256("diamond.storage.crftd.
 
 function s() pure returns (CRFTDTokenDS storage diamondStorage) {
     bytes32 slot = DIAMOND_STORAGE_CRFTD_TOKEN;
-    assembly { diamondStorage.slot := slot } // prettier-ignore
+    assembly {
+        diamondStorage.slot := slot
+    } // prettier-ignore
 }
 
 struct CRFTDTokenDS {
@@ -63,7 +65,7 @@ contract CRFTDStakingTokenV1 is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
     }
 
     function rewardDailyRate() public pure override returns (uint256) {
-        return 1e16; // 0.01
+        return 0.01e18;
     }
 
     function rewardRate(address collection) public view returns (uint256) {
@@ -86,11 +88,7 @@ contract CRFTDStakingTokenV1 is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
         return ERC20UDS.transfer(to, amount);
     }
 
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) public virtual override returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
         _claimReward(from);
 
         return ERC20UDS.transferFrom(from, to, amount);
@@ -134,11 +132,11 @@ contract CRFTDStakingTokenV1 is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
 
     /* ------------- O(n) read-only ------------- */
 
-    function stakedIdsOf(
-        address collection,
-        address user,
-        uint256 collectionSize
-    ) external view returns (uint256[] memory) {
+    function stakedIdsOf(address collection, address user, uint256 collectionSize)
+        external
+        view
+        returns (uint256[] memory)
+    {
         return utils.getOwnedIds(s().ownerOf[collection], user, collectionSize);
     }
 
@@ -158,7 +156,9 @@ contract CRFTDStakingTokenV1 is ERC20RewardUDS, UUPSUpgrade, OwnableUDS {
     }
 
     function airdrop(address[] calldata tos, uint256[] calldata amounts) external onlyOwner {
-        for (uint256 i; i < tos.length; ++i) _mint(tos[i], amounts[i]);
+        for (uint256 i; i < tos.length; ++i) {
+            _mint(tos[i], amounts[i]);
+        }
     }
 
     /* ------------- UUPSUpgrade ------------- */

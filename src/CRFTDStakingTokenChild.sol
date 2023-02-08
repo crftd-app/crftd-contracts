@@ -6,6 +6,7 @@ import {ERC721} from "solmate/tokens/ERC721.sol";
 import {ERC20UDS} from "UDS/tokens/ERC20UDS.sol";
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
 import {UUPSUpgrade} from "UDS/proxy/UUPSUpgrade.sol";
+import {Multicallable} from "UDS/utils/Multicallable.sol";
 import {FxERC721sChild} from "fx-contracts/FxERC721sChild.sol";
 import {ERC20RewardUDS} from "UDS/tokens/extensions/ERC20RewardUDS.sol";
 import {FxERC721sEnumerableChild} from "fx-contracts/extensions/FxERC721sEnumerableChild.sol";
@@ -14,17 +15,21 @@ import {FxERC20UDSChild, MINT_ERC20_SELECTOR} from "fx-contracts/FxERC20UDSChild
 
 // ------------- storage
 
-bytes32 constant DIAMOND_STORAGE_CRFTD_TOKEN = keccak256("diamond.storage.crftd.token");
+/// @dev diamond storage slot `keccak256("diamond.storage.crftd.token.child")`
+bytes32 constant DIAMOND_STORAGE_CRFTD_TOKEN_CHILD = 0x2e5e5d1b22fb9bd55c0f1dd4d407243feb0b09e738fecfb81a9a8cb66b229d26;
 
-function s() pure returns (CRFTDTokenDS storage diamondStorage) {
-    bytes32 slot = DIAMOND_STORAGE_CRFTD_TOKEN;
-    assembly { diamondStorage.slot := slot } // prettier-ignore
+function s() pure returns (CRFTDTokenChildDS storage diamondStorage) {
+    bytes32 slot = DIAMOND_STORAGE_CRFTD_TOKEN_CHILD;
+    assembly {
+        diamondStorage.slot := slot
+    }
 }
 
-struct CRFTDTokenDS {
+struct CRFTDTokenChildDS {
     uint256 rewardEndDate;
     mapping(address => uint256) rewardRate;
     mapping(address => mapping(uint256 => address)) ownerOf;
+    mapping(address => mapping(uint256 => uint256)) specialRewardRate;
 }
 
 // ------------- errors
@@ -49,7 +54,7 @@ error CollectionAlreadyRegistered();
 /// @author phaze (https://github.com/0xPhaze)
 /// @notice Minimal ERC721 staking contract supporting multiple collections
 /// @notice Relays id ownership to ERC20 Token on L2
-contract CRFTDStakingToken is FxERC721sEnumerableChild, ERC20RewardUDS, OwnableUDS, UUPSUpgrade {
+contract CRFTDStakingToken is FxERC721sEnumerableChild, ERC20RewardUDS, OwnableUDS, UUPSUpgrade, Multicallable {
     event CollectionRegistered(address indexed collection, uint256 rewardRate);
 
     constructor(address fxChild) FxERC721sEnumerableChild(fxChild) {
@@ -70,22 +75,28 @@ contract CRFTDStakingToken is FxERC721sEnumerableChild, ERC20RewardUDS, OwnableU
     }
 
     function rewardDailyRate() public pure override returns (uint256) {
-        return 1e16; // 0.01
+        return 0.01e18;
     }
 
     function rewardRate(address collection) public view returns (uint256) {
         return s().rewardRate[collection];
     }
 
+    function specialRewardRate(address collection, uint256 id) public view returns (uint256) {
+        return s().specialRewardRate[collection][id];
+    }
+
+    function getRewardRate(address collection, uint256 id) public view returns (uint256) {
+        uint256 specialRate = s().specialRewardRate[collection][id];
+
+        return (specialRate == 0) ? s().rewardRate[collection] : specialRate;
+    }
+
     function getDailyReward(address user) public view returns (uint256) {
         return _getRewardMultiplier(user) * rewardDailyRate();
     }
 
-    function stakedIdsOf(
-        address collection,
-        address user,
-        uint256
-    ) external view returns (uint256[] memory) {
+    function stakedIdsOf(address collection, address user, uint256) external view returns (uint256[] memory) {
         return FxERC721sEnumerableChild.getOwnedIds(collection, user);
     }
 
@@ -97,11 +108,11 @@ contract CRFTDStakingToken is FxERC721sEnumerableChild, ERC20RewardUDS, OwnableU
 
     /* ------------- internal ------------- */
 
-    function _processMessageFromRoot(
-        uint256 stateId,
-        address rootMessageSender,
-        bytes calldata message
-    ) internal virtual override {
+    function _processMessageFromRoot(uint256 stateId, address rootMessageSender, bytes calldata message)
+        internal
+        virtual
+        override
+    {
         bytes4 selector = bytes4(message);
 
         if (selector == MINT_ERC20_SELECTOR) {
@@ -121,11 +132,7 @@ contract CRFTDStakingToken is FxERC721sEnumerableChild, ERC20RewardUDS, OwnableU
         return ERC20UDS.transfer(to, amount);
     }
 
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) public virtual override returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
         _claimReward(from);
 
         return ERC20UDS.transferFrom(from, to, amount);
@@ -133,21 +140,16 @@ contract CRFTDStakingToken is FxERC721sEnumerableChild, ERC20RewardUDS, OwnableU
 
     /* ------------- hooks ------------- */
 
-    function _afterIdRegistered(
-        address collection,
-        address from,
-        address to,
-        uint256 id
-    ) internal virtual override {
+    function _afterIdRegistered(address collection, address from, address to, uint256 id) internal virtual override {
         super._afterIdRegistered(collection, from, to, id);
 
-        uint256 rate = s().rewardRate[collection];
+        uint256 rate = getRewardRate(collection, id);
 
         if (from != address(0)) {
-            _decreaseRewardMultiplier(msg.sender, uint216(rate));
+            _decreaseRewardMultiplier(from, uint216(rate));
         }
         if (to != address(0)) {
-            _increaseRewardMultiplier(msg.sender, uint216(rate));
+            _increaseRewardMultiplier(to, uint216(rate));
         }
     }
 
@@ -166,12 +168,34 @@ contract CRFTDStakingToken is FxERC721sEnumerableChild, ERC20RewardUDS, OwnableU
         s().rewardEndDate = endDate;
     }
 
+    function setSpecialRewardRate(address collection, uint256[] calldata ids, uint256[] calldata rates)
+        external
+        onlyOwner
+    {
+        for (uint256 i; i < ids.length; ++i) {
+            address owner = ownerOf(collection, ids[i]);
+
+            if (owner != address(0)) {
+                uint256 oldRate = getRewardRate(collection, ids[i]);
+
+                _decreaseRewardMultiplier(owner, uint216(oldRate));
+                _increaseRewardMultiplier(owner, uint216(rates[i]));
+            }
+
+            s().specialRewardRate[collection][ids[i]] = rates[i];
+        }
+    }
+
     function airdrop(address[] calldata tos, uint256 amount) external onlyOwner {
-        for (uint256 i; i < tos.length; ++i) _mint(tos[i], amount);
+        for (uint256 i; i < tos.length; ++i) {
+            _mint(tos[i], amount);
+        }
     }
 
     function airdrop(address[] calldata tos, uint256[] calldata amounts) external onlyOwner {
-        for (uint256 i; i < tos.length; ++i) _mint(tos[i], amounts[i]);
+        for (uint256 i; i < tos.length; ++i) {
+            _mint(tos[i], amounts[i]);
+        }
     }
 
     /* ------------- override ------------- */

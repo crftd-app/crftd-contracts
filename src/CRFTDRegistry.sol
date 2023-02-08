@@ -8,6 +8,7 @@ import {ERC1967Proxy} from "UDS/proxy/ERC1967Proxy.sol";
 import {OwnableUDS as Ownable} from "UDS/auth/OwnableUDS.sol";
 
 error IncorrectValue();
+error ImplementationNotApproved();
 
 //       ___           ___           ___                    _____
 //      /  /\         /  /\         /  /\       ___        /  /::\
@@ -36,15 +37,16 @@ contract CRFTDRegistry is Owned(msg.sender) {
         emit Registered(msg.sender, id, msg.value);
     }
 
-    function deployProxy(
-        address implementation,
-        bytes calldata initCalldata,
-        bytes[] calldata calls
-    ) external returns (address proxy) {
+    function deployProxy(address implementation, bytes calldata initCalldata, bytes[] calldata calls)
+        external
+        returns (address proxy)
+    {
+        if (!approvedImplementation[implementation]) revert ImplementationNotApproved();
+
         proxy = address(new ERC1967Proxy(implementation, initCalldata));
 
         for (uint256 i; i < calls.length; ++i) {
-            (bool success, ) = proxy.call(calls[i]);
+            (bool success,) = proxy.call(calls[i]);
 
             if (!success) {
                 assembly {
@@ -66,7 +68,7 @@ contract CRFTDRegistry is Owned(msg.sender) {
     }
 
     function withdrawETH() external onlyOwner {
-        (bool success, ) = msg.sender.call{value: address(this).balance}("");
+        (bool success,) = msg.sender.call{value: address(this).balance}("");
 
         require(success);
     }

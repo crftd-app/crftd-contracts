@@ -1,4 +1,3 @@
-CRFTD/=src/
 UDS/=lib/UDS/src/
 ds-test/=lib/solmate/lib/ds-test/src/
 forge-std/=lib/forge-std/src/
@@ -10,3 +9,4 @@ fx-portal/=lib/fx-contracts/lib/ERC721M/lib/fx-portal/contracts/
 openzeppelin/=lib/fx-contracts/lib/ERC721M/lib/openzeppelin-contracts/
 solmate/=lib/solmate/src/
 upgrade-scripts/=lib/upgrade-scripts/src/
+opengsn/=node_modules/@opengsn/contracts/src/

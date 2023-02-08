@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {CRFTDStakingTokenV1} from "CRFTD/legacy/CRFTDStakingToken.sol";
-import {CRFTDStakingToken as CRFTDStakingTokenRoot} from "CRFTD/CRFTDStakingTokenRoot.sol";
-import {CRFTDStakingToken as CRFTDStakingTokenChild} from "CRFTD/CRFTDStakingTokenChild.sol";
+import {CRFTDStakingTokenV1} from "src/legacy/CRFTDStakingToken.sol";
+import {CRFTDStakingToken as CRFTDStakingTokenRoot} from "src/CRFTDStakingTokenRoot.sol";
+import {CRFTDStakingToken as CRFTDStakingTokenChild} from "src/CRFTDStakingTokenChild.sol";
 
-import "CRFTD/CRFTDStakingTokenRoot.sol" as RootErrors;
-import "CRFTD/CRFTDStakingTokenChild.sol" as ChildErrors;
+import "src/CRFTDStakingTokenRoot.sol" as RootErrors;
+import "src/CRFTDStakingTokenChild.sol" as ChildErrors;
+import "src/CRFTDStakingTokenChild.sol";
 
 import {ERC1967Proxy} from "UDS/proxy/ERC1967Proxy.sol";
 import {MockERC20UDS} from "UDS/../test/mocks/MockERC20UDS.sol";
@@ -18,13 +19,31 @@ import {TestCRFTDStakingToken} from "./CRFTDStakingToken.t.sol";
 import "forge-std/Test.sol";
 import "futils/futils.sol";
 
+contract TestV1CRFTDStakingTokenV2 is TestCRFTDStakingToken {
+    function setUp() public virtual override {
+        super.setUp();
+
+        logic = address(new CRFTDStakingTokenRoot(address(0), address(0)));
+
+        bytes memory initCall = abi.encodeWithSelector(CRFTDStakingTokenRoot.init.selector, "Token", "TKN");
+        token = CRFTDStakingTokenV1(address(new ERC1967Proxy(logic, initCall)));
+
+        token.setRewardEndDate(rewardEndDate);
+        token.registerCollection(address(nft), 500);
+
+        nft.setApprovalForAll(address(token), true);
+
+        vm.label(address(token), "TKN");
+    }
+}
+
 contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
     using futils for *;
 
     address logicV2;
     address logicChild;
 
-    MockCRFTDStakingTokenRoot tokenV2;
+    MockCRFTDStakingTokenRoot tokenRoot;
     CRFTDStakingTokenChild tokenChild;
 
     address fxTunnel;
@@ -41,6 +60,9 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
         tokenChild = CRFTDStakingTokenChild(address(new ERC1967Proxy(logicChild, initCall)));
         tokenChild.setFxRootTunnel(address(token));
 
+        tokenChild.setRewardEndDate(rewardEndDate);
+        tokenChild.registerCollection(address(nft), 500);
+
         vm.label(address(nft), "nftRoot");
         vm.label(address(token), "tokenV1");
         vm.label(address(fxTunnel), "fxTunnel");
@@ -48,11 +70,9 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
     }
 
     function upgradeToken() internal {
-        skip(5 days);
-
         token.upgradeToAndCall(logicV2, "");
 
-        tokenV2 = MockCRFTDStakingTokenRoot(address(token));
+        tokenRoot = MockCRFTDStakingTokenRoot(address(token));
 
         vm.label(address(token), "tokenV2Root");
     }
@@ -62,41 +82,72 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
     function test_setUpV2() public {
         upgradeToken();
 
-        resetBalance();
-
         test_setUp();
+
+        CRFTDTokenChildDS storage diamondStorage = s();
+
+        bytes32 slot;
+
+        assembly {
+            slot := diamondStorage.slot
+        }
+
+        assertEq(slot, keccak256("diamond.storage.crftd.token.child"));
+        assertEq(DIAMOND_STORAGE_CRFTD_TOKEN_CHILD, keccak256("diamond.storage.crftd.token.child"));
+
+        assertEq(tokenChild.name(), "TokenChild");
+        assertEq(tokenChild.symbol(), "TKNCHLD");
+        assertEq(tokenChild.decimals(), 18);
+
+        assertEq(tokenChild.rewardRate(address(nft)), 500);
+        assertEq(tokenChild.rewardEndDate(), rewardEndDate);
+        assertEq(tokenChild.rewardDailyRate(), 0.01e18);
     }
 
     /* ------------- stake() ------------- */
 
     function test_stakeV2() public {
-        test_stake2();
+        test_stake_unstake_multiple_times();
 
         upgradeToken();
 
+        skip(5 days);
+
         resetBalance();
 
-        test_stake2();
+        test_stake_unstake_multiple_times();
     }
 
-    function test_stakeV2(
-        uint256 amountIn,
-        uint256 amountOut,
-        uint256 r
-    ) public {
+    function test_stakeV2(uint256 amountIn, uint256 amountOut, uint256 r) public {
         amountIn = bound(amountIn, 0, 20);
 
         test_stake(amountIn, amountOut, r);
 
         upgradeToken();
-
+        skip(5 days);
         resetBalance();
 
-        unchecked {
-            r += 666;
-        }
+        test_stake(amountIn, amountOut, random.next());
+    }
 
-        test_stake(amountIn, amountOut, r);
+    function test_setSpecialRewardRate() public {
+        upgradeToken();
+
+        tokenRoot.startMigration(address(tokenChild));
+        tokenChild.setSpecialRewardRate(address(nft), [1].toMemory(), [7700].toMemory());
+        tokenRoot.stake(address(nft), [1, 3, 4].toMemory());
+
+        assertEq(tokenChild.getDailyReward(self), 2 * 5e18 + 77e18);
+    }
+
+    function test_setSpecialRewardRate2() public {
+        upgradeToken();
+
+        tokenRoot.startMigration(address(tokenChild));
+        tokenRoot.stake(address(nft), [1, 3, 4].toMemory());
+        tokenChild.setSpecialRewardRate(address(nft), [1].toMemory(), [7700].toMemory());
+
+        assertEq(tokenChild.getDailyReward(self), 2 * 5e18 + 77e18);
     }
 
     /* ------------- migration() ------------- */
@@ -106,38 +157,40 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
     function test_safeMigrate() public {
         token.stake(address(nft), [1, 4, 3].toMemory());
 
+        skip(5 days);
+
         upgradeToken();
 
-        tokenV2.startMigration(address(tokenChild));
+        tokenRoot.startMigration(address(tokenChild));
 
-        assertEq(tokenV2.fxChildTunnel(), address(tokenChild));
-        assertEq(tokenV2.rewardEndDate(), MIGRATION_START_DATE);
+        assertEq(tokenRoot.fxChildTunnel(), address(tokenChild));
+        assertEq(tokenRoot.rewardEndDate(), MIGRATION_START_DATE);
 
         uint256[][] memory ids = new uint256[][](1);
-        ids[0] = token.stakedIdsOf(address(nft), tester, 77);
+        ids[0] = tokenRoot.stakedIdsOf(address(nft), self, 77);
 
-        uint256 migratedBalance = tokenV2.totalBalanceOf(tester);
+        uint256 migratedBalance = tokenRoot.totalBalanceOf(self);
+        assertGt(migratedBalance, 0);
 
-        assertTrue(migratedBalance > 0);
-
-        tokenV2.safeMigrate([address(nft)].toMemory(), ids);
-
-        skip(10 days);
-
-        assertEq(tokenV2.balanceOf(tester), 0);
-        assertEq(tokenV2.totalBalanceOf(tester), 0);
-
-        assertEq(tokenV2.ownerOf(address(nft), 1), tester);
-        assertEq(tokenV2.ownerOf(address(nft), 3), tester);
-        assertEq(tokenV2.ownerOf(address(nft), 4), tester);
-
-        assertEq(tokenChild.ownerOf(address(nft), 1), tester);
-        assertEq(tokenChild.ownerOf(address(nft), 3), tester);
-        assertEq(tokenChild.ownerOf(address(nft), 4), tester);
-
-        assertEq(tokenChild.balanceOf(tester), migratedBalance);
+        tokenRoot.safeMigrate([address(nft)].toMemory(), ids);
 
         skip(10 days);
+
+        assertEq(tokenRoot.balanceOf(self), 0);
+        assertEq(tokenRoot.totalBalanceOf(self), 0);
+        assertEq(tokenRoot.getDailyReward(self), 0);
+
+        assertEq(tokenRoot.ownerOf(address(nft), 1), self);
+        assertEq(tokenRoot.ownerOf(address(nft), 3), self);
+        assertEq(tokenRoot.ownerOf(address(nft), 4), self);
+
+        assertEq(tokenChild.ownerOf(address(nft), 1), self);
+        assertEq(tokenChild.ownerOf(address(nft), 3), self);
+        assertEq(tokenChild.ownerOf(address(nft), 4), self);
+
+        assertEq(tokenChild.balanceOf(self), migratedBalance);
+        assertEq(tokenChild.totalBalanceOf(self), migratedBalance + 10 * ids[0].length * 5e18);
+        assertEq(tokenChild.getDailyReward(self), ids[0].length * 5e18);
     }
 
     /// user has already migrated and migrates further balances
@@ -146,33 +199,52 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
 
         skip(10 days);
 
-        address(tokenChild).balanceDiff(tester);
+        address(tokenChild).balanceDiff(self);
 
-        tokenV2.safeMigrate(new address[](0), new uint256[][](0));
+        tokenRoot.safeMigrate(new address[](0), new uint256[][](0));
 
-        assertEq(tokenV2.balanceOf(tester), 0);
-        assertEq(tokenV2.totalBalanceOf(tester), 0);
+        assertEq(tokenRoot.balanceOf(self), 0);
+        assertEq(tokenRoot.totalBalanceOf(self), 0);
 
-        assertEq(address(tokenChild).balanceDiff(tester), 0);
+        assertEq(address(tokenChild).balanceDiff(self), 0);
 
         skip(10 days);
 
-        tokenV2.mint(tester, 333e18);
+        tokenRoot.mint(self, 333e18);
+        tokenRoot.safeMigrate(new address[](0), new uint256[][](0));
 
-        tokenV2.safeMigrate(new address[](0), new uint256[][](0));
+        assertEq(tokenRoot.balanceOf(self), 0);
+        assertEq(tokenRoot.totalBalanceOf(self), 0);
 
-        assertEq(tokenV2.balanceOf(tester), 0);
-        assertEq(tokenV2.totalBalanceOf(tester), 0);
+        assertEq(address(tokenChild).balanceDiff(self), 333e18);
 
-        assertEq(address(tokenChild).balanceDiff(tester), 333e18);
+        assertEq(tokenRoot.ownerOf(address(nft), 1), self);
+        assertEq(tokenRoot.ownerOf(address(nft), 3), self);
+        assertEq(tokenRoot.ownerOf(address(nft), 4), self);
 
-        assertEq(tokenV2.ownerOf(address(nft), 1), tester);
-        assertEq(tokenV2.ownerOf(address(nft), 3), tester);
-        assertEq(tokenV2.ownerOf(address(nft), 4), tester);
+        assertEq(tokenChild.ownerOf(address(nft), 1), self);
+        assertEq(tokenChild.ownerOf(address(nft), 3), self);
+        assertEq(tokenChild.ownerOf(address(nft), 4), self);
+    }
 
-        assertEq(tokenChild.ownerOf(address(nft), 1), tester);
-        assertEq(tokenChild.ownerOf(address(nft), 3), tester);
-        assertEq(tokenChild.ownerOf(address(nft), 4), tester);
+    /// user has already migrated and migrates further balances
+    function test_safeMigrate_balance_only() public {
+        token.airdrop([self].toMemory(), [uint256(100e18)].toMemory());
+
+        upgradeToken();
+
+        tokenRoot.startMigration(address(tokenChild));
+
+        address(token).balanceDiff(self);
+        address(tokenChild).balanceDiff(self);
+
+        tokenRoot.safeMigrate(new address[](0), new uint256[][](0));
+
+        assertEq(tokenRoot.balanceOf(self), 0);
+        assertEq(tokenRoot.totalBalanceOf(self), 0);
+
+        assertEq(address(token).balanceDiff(self), -100e18);
+        assertEq(address(tokenChild).balanceDiff(self), 100e18);
     }
 
     /// user migrates with incomplete ids
@@ -181,13 +253,13 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
 
         upgradeToken();
 
-        tokenV2.startMigration(address(tokenChild));
+        tokenRoot.startMigration(address(tokenChild));
 
         uint256[][] memory ids = new uint256[][](1);
         ids[0] = [1, 4].toMemory();
 
         vm.expectRevert(RootErrors.MigrationIncomplete.selector);
-        tokenV2.safeMigrate([address(nft)].toMemory(), ids);
+        tokenRoot.safeMigrate([address(nft)].toMemory(), ids);
     }
 
     /// user has already migrated and tries safe migrate again
@@ -198,7 +270,7 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
         ids[0] = [1].toMemory();
 
         vm.expectRevert(RootErrors.MigrationIncomplete.selector);
-        tokenV2.safeMigrate([address(nft)].toMemory(), ids);
+        tokenRoot.safeMigrate([address(nft)].toMemory(), ids);
     }
 
     function test_safeMigrate_guard_exploit() public {
@@ -206,20 +278,20 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
 
         upgradeToken();
 
-        tokenV2.startMigration(address(tokenChild));
+        tokenRoot.startMigration(address(tokenChild));
 
         uint256[][] memory ids = new uint256[][](1);
         ids[0] = [1, 1, 1].toMemory();
 
-        tokenV2.safeMigrate([address(nft)].toMemory(), ids);
+        tokenRoot.safeMigrate([address(nft)].toMemory(), ids);
 
         skip(10 days);
 
-        assertEq(tokenV2.ownerOf(address(nft), 1), tester);
-        assertEq(tokenV2.ownerOf(address(nft), 3), tester);
-        assertEq(tokenV2.ownerOf(address(nft), 4), tester);
+        assertEq(tokenRoot.ownerOf(address(nft), 1), self);
+        assertEq(tokenRoot.ownerOf(address(nft), 3), self);
+        assertEq(tokenRoot.ownerOf(address(nft), 4), self);
 
-        assertEq(tokenChild.ownerOf(address(nft), 1), tester);
+        assertEq(tokenChild.ownerOf(address(nft), 1), self);
         assertEq(tokenChild.ownerOf(address(nft), 3), address(0));
         assertEq(tokenChild.ownerOf(address(nft), 4), address(0));
     }
@@ -229,7 +301,7 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
 
         vm.expectRevert(RootErrors.MigrationNotStarted.selector);
 
-        tokenV2.safeMigrate(new address[](0), new uint256[][](0));
+        tokenRoot.safeMigrate(new address[](0), new uint256[][](0));
     }
 
     function test_synchronizeIdsWithChild_revert_MigrationNotStarted() public {
@@ -237,7 +309,7 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
 
         vm.expectRevert(RootErrors.MigrationNotStarted.selector);
 
-        tokenV2.synchronizeIdsWithChild(new address[](0), new uint256[][](0));
+        tokenRoot.synchronizeIdsWithChild(new address[](0), new uint256[][](0));
     }
 
     function test_revert_MigrationRequired() public {
@@ -247,16 +319,16 @@ contract TestCRFTDStakingTokenV2 is TestCRFTDStakingToken {
 
         upgradeToken();
 
-        tokenV2.startMigration(address(tokenChild));
+        tokenRoot.startMigration(address(tokenChild));
 
         vm.expectRevert(RootErrors.MigrationRequired.selector);
-        tokenV2.stake(address(nft), [2].toMemory());
+        tokenRoot.stake(address(nft), [2].toMemory());
 
         vm.expectRevert(RootErrors.MigrationRequired.selector);
-        tokenV2.unstake(address(nft), [1].toMemory());
+        tokenRoot.unstake(address(nft), [1].toMemory());
 
         vm.expectRevert(RootErrors.MigrationRequired.selector);
-        tokenV2.synchronizeIdsWithChild(new address[](0), new uint256[][](0));
+        tokenRoot.synchronizeIdsWithChild(new address[](0), new uint256[][](0));
     }
 }
 
