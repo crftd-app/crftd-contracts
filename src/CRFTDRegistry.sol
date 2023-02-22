@@ -28,8 +28,47 @@ error ImplementationNotApproved();
 contract CRFTDRegistry is Owned(msg.sender) {
     event Registered(address indexed user, bytes32 id, uint256 fee);
     event ProxyDeployed(address indexed owner, address indexed proxy);
+    event PurchaseComplete(
+        address purchaser,
+        string tokenSetId,
+        uint256 quantity
+    );
 
-    mapping(address => bool) public approvedImplementation;
+    uint256 public exportPrice = 0.0001 ether;
+
+    // mapping(address => bool) public approvedImplementation;
+    mapping(string => uint256) public paidExports;
+
+    function export(
+        string memory tokenSetId,
+        uint256 quantity,
+        bytes memory signature
+    ) public payable {
+        require(quantity > 0, "INVALID_QUANTITY");
+        require(msg.value == quantity * exportPrice, "INSUFFICIENT_PAYMENT");
+        require(paidExports[tokenSetId] == 0, "ALREADY_PAID");
+        bytes32 hash = keccak256(
+            abi.encodePacked(msg.sender, tokenSetId, quantity)
+        );
+        require(verify(hash, signature), "INVALID_SIGNATURE");
+
+        paidExports[tokenSetId] = quantity;
+        emit PurchaseComplete(msg.sender, tokenSetId, quantity);
+    }
+
+    function verify(
+        bytes32 hash,
+        bytes memory signature
+    ) internal view returns (bool) {
+        require(signer != address(0), "INVALID_SIGNER_ADDRESS");
+        bytes32 signedHash = hash.toEthSignedMessageHash();
+        return signedHash.recover(signature) == signer;
+    }
+
+    function setExportPrice(uint256 newExportPrice) external {
+        require(newExportPrice != 0, "EXPORT PRICE SHOULD NOT BE ZERO");
+        exportPrice = newExportPrice;
+    }
 
     /* ------------- external ------------- */
 
@@ -37,16 +76,19 @@ contract CRFTDRegistry is Owned(msg.sender) {
         emit Registered(msg.sender, id, msg.value);
     }
 
-    function deployProxy(address implementation, bytes calldata initCalldata, bytes[] calldata calls)
-        external
-        returns (address proxy)
-    {
-        if (!approvedImplementation[implementation]) revert ImplementationNotApproved();
+    function deployProxy(
+        address implementation,
+        bytes calldata initCalldata,
+        bytes[] calldata calls,
+        string memory tokenSetId
+    ) external returns (address proxy) {
+        // if (!approvedImplementation[implementation]) revert ImplementationNotApproved();
+        require(exportPrice[tokenSetId] > 0, "NOT REGISTERED YET");
 
         proxy = address(new ERC1967Proxy(implementation, initCalldata));
 
         for (uint256 i; i < calls.length; ++i) {
-            (bool success,) = proxy.call(calls[i]);
+            (bool success, ) = proxy.call(calls[i]);
 
             if (!success) {
                 assembly {
@@ -63,12 +105,12 @@ contract CRFTDRegistry is Owned(msg.sender) {
 
     /* ------------- owner ------------- */
 
-    function setImplementationApproved(address implementation, bool approved) external onlyOwner {
-        approvedImplementation[implementation] = approved;
-    }
+    // function setImplementationApproved(address implementation, bool approved) external onlyOwner {
+    //     approvedImplementation[implementation] = approved;
+    // }
 
     function withdrawETH() external onlyOwner {
-        (bool success,) = msg.sender.call{value: address(this).balance}("");
+        (bool success, ) = msg.sender.call{value: address(this).balance}("");
 
         require(success);
     }
