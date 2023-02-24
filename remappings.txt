@@ -10,3 +10,4 @@ openzeppelin/=lib/fx-contracts/lib/ERC721M/lib/openzeppelin-contracts/
 solmate/=lib/solmate/src/
 upgrade-scripts/=lib/upgrade-scripts/src/
 opengsn/=node_modules/@opengsn/contracts/src/
+@openzeppelin/=lib/openzeppelin-contracts/
