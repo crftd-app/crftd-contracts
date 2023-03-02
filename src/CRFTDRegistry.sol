@@ -27,14 +27,40 @@ error ImplementationNotApproved();
 /// @notice CRFTD proxy registry
 contract CRFTDRegistry is Owned(msg.sender) {
     event Registered(address indexed user, bytes32 id, uint256 fee);
+    event CollectionRegistered(address indexed user, bytes32 id, uint256 fee);
     event ProxyDeployed(address indexed owner, address indexed proxy);
+    event VIPStatusChanged(address indexed user, bool status);
 
     mapping(address => bool) public approvedImplementation;
 
-    /* ------------- external ------------- */
+    mapping(bytes32 => uint256) public paidStatus;
+    mapping(address => bool) public vipRole;
 
+
+    /* ------------- external ------------- */
     function register(bytes32 id) external payable {
         emit Registered(msg.sender, id, msg.value);
+    }
+
+    /// @dev This is reponsible for the collect payment for art generation
+    /// @dev tokenId is the keccak256(abi.encodePacked(msg.sender,collectionId,collectionSize))
+    function registerCollection(bytes32 tokenId, uint256 collectionSize) external payable {
+        uint256 fee = 0.0001 ether * collectionSize;
+        if (msg.value != fee) {
+            revert IncorrectValue();
+        }
+        paidStatus[tokenId] = 1;
+        emit CollectionRegistered(msg.sender, tokenId, msg.value);
+    }
+
+    /// crftd has 1 ETH fixed fee for 10k collection
+    function feePreview(uint256 collectionSize) public pure returns(uint256) {
+        return 0.0001 ether * collectionSize;
+    }
+
+    function changeVipRoleStatus(address user, bool status) external onlyOwner {
+        vipRole[user] = status;
+        emit VIPStatusChanged(user, status);
     }
 
     function deployProxy(address implementation, bytes calldata initCalldata, bytes[] calldata calls)
