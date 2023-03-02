@@ -27,14 +27,14 @@ error ImplementationNotApproved();
 /// @notice CRFTD proxy registry
 contract CRFTDRegistry is Owned(msg.sender) {
     event Registered(address indexed user, bytes32 id, uint256 fee);
-    event CollectionRegistered(address indexed user, bytes32 id, uint256 fee);
+    event TokenSetRegistered(address indexed user, bytes32 id, uint256 fee);
     event ProxyDeployed(address indexed owner, address indexed proxy);
-    event VIPStatusChanged(address indexed user, bool status);
+
+    uint256 public tokenRegisterFee = 0.0001 ether;
 
     mapping(address => bool) public approvedImplementation;
 
     mapping(bytes32 => uint256) public paidStatus;
-    mapping(address => bool) public vipRole;
 
 
     /* ------------- external ------------- */
@@ -44,23 +44,13 @@ contract CRFTDRegistry is Owned(msg.sender) {
 
     /// @dev This is reponsible for the collect payment for art generation
     /// @dev tokenId is the keccak256(abi.encodePacked(msg.sender,collectionId,collectionSize))
-    function registerCollection(bytes32 tokenId, uint256 collectionSize) external payable {
-        uint256 fee = 0.0001 ether * collectionSize;
+    function registerTokenSet(bytes32 tokenSetId, uint256 collectionSize) external payable {
+        uint256 fee = tokenRegisterFee * collectionSize;
         if (msg.value != fee) {
             revert IncorrectValue();
         }
-        paidStatus[tokenId] = 1;
-        emit CollectionRegistered(msg.sender, tokenId, msg.value);
-    }
-
-    /// crftd has 1 ETH fixed fee for 10k collection
-    function feePreview(uint256 collectionSize) public pure returns(uint256) {
-        return 0.0001 ether * collectionSize;
-    }
-
-    function changeVipRoleStatus(address user, bool status) external onlyOwner {
-        vipRole[user] = status;
-        emit VIPStatusChanged(user, status);
+        paidStatus[tokenSetId] = 1;
+        emit TokenSetRegistered(msg.sender, tokenSetId, msg.value);
     }
 
     function deployProxy(address implementation, bytes calldata initCalldata, bytes[] calldata calls)
@@ -91,6 +81,10 @@ contract CRFTDRegistry is Owned(msg.sender) {
 
     function setImplementationApproved(address implementation, bool approved) external onlyOwner {
         approvedImplementation[implementation] = approved;
+    }
+
+    function settokenRegisterFee(uint256 fee) external onlyOwner {
+        tokenRegisterFee = fee;
     }
 
     function withdrawETH() external onlyOwner {
