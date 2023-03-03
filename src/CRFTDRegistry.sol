@@ -44,7 +44,7 @@ contract CRFTDRegistry is Owned(msg.sender) {
     function registerTokenSet(bytes32 tokenSetId, uint256 collectionSize) external payable {
         uint256 fee = tokenRegisterFee * collectionSize;
         if (msg.value != fee) revert IncorrectValue();
-        paidStatus[tokenSetId] = 1;
+        paidStatus[tokenSetId] = true;
         emit TokenSetRegistered(msg.sender, tokenSetId, msg.value);
     }
 
