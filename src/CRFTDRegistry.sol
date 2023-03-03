@@ -34,21 +34,16 @@ contract CRFTDRegistry is Owned(msg.sender) {
 
     mapping(address => bool) public approvedImplementation;
 
-    mapping(bytes32 => uint256) public paidStatus;
-
+    mapping(bytes32 => bool) public paidStatus;
 
     /* ------------- external ------------- */
     function register(bytes32 id) external payable {
         emit Registered(msg.sender, id, msg.value);
     }
 
-    /// @dev This is reponsible for the collect payment for art generation
-    /// @dev tokenId is the keccak256(abi.encodePacked(msg.sender,collectionId,collectionSize))
     function registerTokenSet(bytes32 tokenSetId, uint256 collectionSize) external payable {
         uint256 fee = tokenRegisterFee * collectionSize;
-        if (msg.value != fee) {
-            revert IncorrectValue();
-        }
+        if (msg.value != fee) revert IncorrectValue();
         paidStatus[tokenSetId] = 1;
         emit TokenSetRegistered(msg.sender, tokenSetId, msg.value);
     }
@@ -83,7 +78,7 @@ contract CRFTDRegistry is Owned(msg.sender) {
         approvedImplementation[implementation] = approved;
     }
 
-    function settokenRegisterFee(uint256 fee) external onlyOwner {
+    function setTokenRegisterFee(uint256 fee) external onlyOwner {
         tokenRegisterFee = fee;
     }
 
