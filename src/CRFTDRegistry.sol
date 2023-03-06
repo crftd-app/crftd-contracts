@@ -32,9 +32,9 @@ contract CRFTDRegistry is Owned(msg.sender) {
 
     uint256 public tokenRegisterFee = 0.0001 ether;
 
-    mapping(address => bool) public approvedImplementation;
+    mapping(address contractAddress=> bool approved) public approvedImplementation;
 
-    mapping(bytes32 => bool) public paidStatus;
+    mapping(bytes32 tokenSetId=> bool status) public paidStatus;
 
     /* ------------- external ------------- */
     function register(bytes32 id) external payable {
