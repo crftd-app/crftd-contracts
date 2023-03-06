@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.19;
 
 import {Owned} from "solmate/auth/Owned.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -32,9 +32,9 @@ contract CRFTDRegistry is Owned(msg.sender) {
 
     uint256 public tokenRegisterFee = 0.0001 ether;
 
-    mapping(address contractAddress=> bool approved) public approvedImplementation;
+    mapping(address contractAddress => bool approved) public approvedImplementation;
 
-    mapping(bytes32 tokenSetId=> bool status) public paidStatus;
+    mapping(bytes32 tokenSetId => bool status) public paidStatus;
 
     /* ------------- external ------------- */
     function register(bytes32 id) external payable {
@@ -43,7 +43,7 @@ contract CRFTDRegistry is Owned(msg.sender) {
 
     function registerTokenSet(bytes32 tokenSetId, uint256 collectionSize) external payable {
         uint256 fee = tokenRegisterFee * collectionSize;
-        if (msg.value != fee) revert IncorrectValue();
+        if (msg.value != fee && msg.value == 0) revert IncorrectValue();
         paidStatus[tokenSetId] = true;
         emit TokenSetRegistered(msg.sender, tokenSetId, msg.value);
     }
