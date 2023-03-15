@@ -9,6 +9,7 @@ import {OwnableUDS as Ownable} from "UDS/auth/OwnableUDS.sol";
 
 error IncorrectValue();
 error ImplementationNotApproved();
+error AlreadyPaid();
 
 //       ___           ___           ___                    _____
 //      /  /\         /  /\         /  /\       ___        /  /::\
@@ -36,12 +37,18 @@ contract CRFTDRegistry is Owned(msg.sender) {
 
     mapping(bytes32 tokenSetId => bool status) public paidStatus;
 
+    mapping(address user => uint256 nonce) public nonces;
+
     /* ------------- external ------------- */
     function register(bytes32 id) external payable {
         emit Registered(msg.sender, id, msg.value);
     }
 
-    function registerTokenSet(bytes32 tokenSetId, uint256 collectionSize) external payable {
+    function registerTokenSet(uint256 collectionSize) external payable {
+        bytes32 tokenSetId = keccak256(abi.encodePacked(msg.sender,collectionSize, nonces[msg.sender]++));
+        if (paidStatus[tokenSetId]) {
+            revert AlreadyPaid();
+        }
         uint256 fee = tokenRegisterFee * collectionSize;
         if (msg.value != fee || msg.value == 0) revert IncorrectValue();
         paidStatus[tokenSetId] = true;
