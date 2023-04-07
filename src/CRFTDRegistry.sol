@@ -44,8 +44,8 @@ contract CRFTDRegistry is Owned(msg.sender) {
         emit Registered(msg.sender, id, msg.value);
     }
 
-    function registerTokenSet(uint256 collectionSize) external payable {
-        bytes32 tokenSetId = keccak256(abi.encodePacked(msg.sender,collectionSize, nonces[msg.sender]++));
+    function registerTokenSet(uint128 collectionSize) external payable {
+        bytes32 tokenSetId = keccak256(abi.encodePacked(msg.sender, collectionSize, nonces[msg.sender]++));
         if (paidStatus[tokenSetId]) {
             revert AlreadyPaid();
         }
